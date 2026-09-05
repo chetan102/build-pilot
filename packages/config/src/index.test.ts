@@ -11,3 +11,4 @@ describe('config package', () => {
     expect(config.REDIS_PORT).toBe(6379);
   });
 });
+

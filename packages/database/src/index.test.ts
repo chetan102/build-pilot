@@ -7,3 +7,4 @@ describe('database package', () => {
     expect(isDbConnected(DB_READY_STATE.DISCONNECTED)).toBe(false);
   });
 });
+

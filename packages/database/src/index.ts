@@ -8,3 +8,4 @@ export const DB_READY_STATE = {
 export function isDbConnected(readyState: number): boolean {
   return readyState === DB_READY_STATE.CONNECTED;
 }
+

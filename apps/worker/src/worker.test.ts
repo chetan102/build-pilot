@@ -7,3 +7,4 @@ describe('worker service', () => {
     expect(worker.status).toBe('initialized');
   });
 });
+

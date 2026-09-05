@@ -31,3 +31,4 @@ export const ToolPermissionClass = {
 
 export type ToolPermissionClassType =
   (typeof ToolPermissionClass)[keyof typeof ToolPermissionClass];
+

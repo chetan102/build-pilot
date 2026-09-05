@@ -10,7 +10,7 @@
       "dependsOn": ["^lint"]
     },
     "typecheck": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^typecheck"]
     },
     "test": {
       "dependsOn": ["^build"]
@@ -24,3 +24,4 @@
     }
   }
 }
+

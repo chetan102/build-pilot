@@ -8,3 +8,4 @@ describe('observability package', () => {
     expect(typeof logger.info).toBe('function');
   });
 });
+

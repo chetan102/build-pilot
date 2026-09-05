@@ -20,3 +20,4 @@ export type EnvConfig = z.infer<typeof envSchema>;
 export function loadConfig(env: Record<string, unknown> = process.env): EnvConfig {
   return envSchema.parse(env);
 }
+

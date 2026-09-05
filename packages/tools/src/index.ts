@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ToolPermissionClassType } from '@buildpilot/domain';
+import { ToolPermissionClass, ToolPermissionClassType } from '@buildpilot/domain';
 
 export interface ToolContext {
   workspaceDir: string;
@@ -7,7 +7,7 @@ export interface ToolContext {
   runId: string;
 }
 
-export interface ToolDefinition<TInput = unknown, TOutput = unknown> {
+export interface ToolDefinition<TInput = any, TOutput = any> {
   name: string;
   description: string;
   permissionClass: ToolPermissionClassType;
@@ -30,3 +30,4 @@ export class ToolRegistry {
     return Array.from(this.tools.values());
   }
 }
+

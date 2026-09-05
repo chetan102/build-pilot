@@ -28,3 +28,4 @@ export interface LLMProvider {
   readonly id: string;
   generate(request: LLMRequest): Promise<LLMResponse>;
 }
+

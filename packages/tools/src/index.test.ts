@@ -18,3 +18,4 @@ describe('tools package', () => {
     expect(registry.list().length).toBe(1);
   });
 });
+

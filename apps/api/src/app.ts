@@ -4,14 +4,6 @@ import { pinoHttp } from 'pino-http';
 import { createLogger } from '@buildpilot/observability';
 import { generateCorrelationId } from '@buildpilot/shared';
 
-declare global {
-  namespace Express {
-    interface Request {
-      correlationId?: string;
-    }
-  }
-}
-
 export function createApp(): Express {
   const logger = createLogger({ serviceName: 'control-api' });
   const app = express();
@@ -23,7 +15,7 @@ export function createApp(): Express {
   app.use((req: Request, res: Response, next: NextFunction) => {
     const correlationId = (req.headers['x-correlation-id'] as string) || generateCorrelationId('req');
     res.setHeader('x-correlation-id', correlationId);
-    req.correlationId = correlationId;
+    (req as any).correlationId = correlationId;
     next();
   });
 
@@ -31,7 +23,7 @@ export function createApp(): Express {
     app.use(
       pinoHttp({
         logger,
-        genReqId: (req) => (req as Request).correlationId || generateCorrelationId('req'),
+        genReqId: (req) => (req as any).correlationId || generateCorrelationId('req'),
       }),
     );
   }
@@ -60,3 +52,4 @@ export function createApp(): Express {
 
   return app;
 }
+

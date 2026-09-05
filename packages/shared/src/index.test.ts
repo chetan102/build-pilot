@@ -12,3 +12,4 @@ describe('shared utilities', () => {
     expect(id.startsWith('bp_')).toBe(true);
   });
 });
+

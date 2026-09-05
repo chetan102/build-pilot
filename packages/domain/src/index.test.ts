@@ -7,3 +7,4 @@ describe('domain package', () => {
     expect(() => TaskStatusSchema.parse('INVALID_STATUS')).toThrow();
   });
 });
+

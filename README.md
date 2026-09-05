@@ -71,3 +71,4 @@ build-pilot/
 ├── scripts/                         # Development, seed, and benchmark scripts
 └── docs/                            # Architecture decisions & API specifications
 ```
+

@@ -30,3 +30,4 @@ if (process.env.NODE_ENV !== 'test') {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
 }
+
