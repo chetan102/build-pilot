@@ -8,6 +8,7 @@ describe('config package', () => {
     });
     expect(config.NODE_ENV).toBe('test');
     expect(config.PORT).toBe(4000);
-    expect(config.REDIS_PORT).toBe(6379);
+    expect(config.REDIS_PORT).toBe(6380);
   });
 });
+
