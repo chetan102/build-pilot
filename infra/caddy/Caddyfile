@@ -1,0 +1,21 @@
+{
+  admin off
+  auto_https off
+}
+
+:80 {
+  # Control API routing
+  handle /api/* {
+    reverse_proxy api:4000
+  }
+
+  handle /health {
+    reverse_proxy api:4000
+  }
+
+  # Next.js Dashboard routing
+  handle {
+    reverse_proxy web:3000
+  }
+}
+

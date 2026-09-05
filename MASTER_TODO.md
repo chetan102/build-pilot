@@ -8,10 +8,10 @@
 
 ## 📊 Overall Progress Summary
 
-- **Current Phase:** Phase 0 — Project Foundation
-- **Current Task:** Task 0.2 — Local infrastructure
-- **Project Status:** 🟢 IN PROGRESS (Phase 0: 50% Complete)
-- **Completed Tasks:** 1 / 23 Phases (Task 0.1 complete)
+- **Current Phase:** Phase 1 — Web Dashboard Shell
+- **Current Task:** Task 1.1 — Next.js application
+- **Project Status:** 🟢 IN PROGRESS (Phase 0: 100% Complete ✅ | Phase 1: 0% Complete)
+- **Completed Tasks:** 2 / 23 Phases (Phase 0 complete)
 
 ---
 
@@ -57,14 +57,14 @@ Next TODO: <next unchecked task>
   - [x] Verify clean install and run from fresh clone.
   - **Acceptance Criteria:** `pnpm install`, `pnpm lint`, `pnpm typecheck`, and `pnpm test` all succeed cleanly. (PASSED ✅)
 
-- [ ] **Task 0.2 — Local infrastructure**
-  - [ ] Create `infra/docker-compose.yml`.
-  - [ ] Configure MongoDB service container with health checks and persistent volume.
-  - [ ] Configure Redis service container with health checks and persistent volume.
-  - [ ] Add Caddy service placeholder.
-  - [ ] Configure internal Docker network with proper port isolation.
-  - [ ] Document startup/shutdown commands in `infra/README.md`.
-  - **Acceptance Criteria:** `docker compose up -d` starts MongoDB and Redis, and both pass health checks.
+- [x] **Task 0.2 — Local infrastructure**
+  - [x] Create `infra/docker-compose.yml`.
+  - [x] Configure MongoDB service container with health checks and persistent volume.
+  - [x] Configure Redis service container with health checks and persistent volume.
+  - [x] Add Caddy service placeholder.
+  - [x] Configure internal Docker network with proper port isolation.
+  - [x] Document startup/shutdown commands in `infra/README.md`.
+  - **Acceptance Criteria:** `docker compose up -d` starts MongoDB and Redis, and both pass health checks. (PASSED ✅)
 
 ---
 
