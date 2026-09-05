@@ -1,0 +1,27 @@
+{
+  "name": "@buildpilot/github",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "eslint \"src/**/*.ts\"",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@buildpilot/config": "workspace:*",
+    "@buildpilot/domain": "workspace:*",
+    "@buildpilot/observability": "workspace:*",
+    "@octokit/rest": "^21.0.2",
+    "octokit": "^4.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.10",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
