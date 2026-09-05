@@ -8,7 +8,7 @@ export const envSchema = z.object({
   PORT: z.coerce.number().default(4000),
   MONGODB_URI: z.string().default('mongodb://localhost:27017/buildpilot'),
   REDIS_HOST: z.string().default('localhost'),
-  REDIS_PORT: z.coerce.number().default(6380),
+  REDIS_PORT: z.coerce.number().default(6379),
   REDIS_PASSWORD: z.string().optional(),
   DEFAULT_LLM_PROVIDER: z.string().default('openrouter'),
   DEFAULT_LLM_MODEL: z.string().default('anthropic/claude-3.5-sonnet'),
