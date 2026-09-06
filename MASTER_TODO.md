@@ -8,14 +8,10 @@
 
 ## 📊 Overall Progress Summary
 
-- **Current Phase:** Phase 1 — Web Dashboard Shell
-- **Current Task:** Task 1.2 — Domain types
-- **Project Status:** 🟢 IN PROGRESS (Phase 0: 100% Complete ✅ | Phase 1: 50% Complete)
-- **Completed Tasks:** 3 / 23 Phases (Task 0.1, 0.2, 1.1 complete)
 - **Current Phase:** Phase 2 — Database Layer
-- **Current Task:** Task 2.1 — MongoDB connection
-- **Project Status:** 🟢 IN PROGRESS (Phase 0: 100% Complete ✅ | Phase 1: 100% Complete ✅ | Phase 2: 0% Complete)
-- **Completed Tasks:** 4 / 23 Phases (Task 0.1, 0.2, 1.1, 1.2 complete)
+- **Current Task:** Task 2.2 — Core collections & models
+- **Project Status:** 🟢 IN PROGRESS (Phase 0: 100% Complete ✅ | Phase 1: 100% Complete ✅ | Phase 2: 50% Complete)
+- **Completed Tasks:** 5 / 23 Phases (Task 0.1, 0.2, 1.1, 1.2, 2.1 complete)
 
 ---
 
@@ -102,12 +98,12 @@ Next TODO: <next unchecked task>
 
 ## Phase 2 — Database Layer
 
-- [ ] **Task 2.1 — MongoDB connection**
-  - [ ] Create `packages/database` package.
-  - [ ] Add MongoDB / Mongoose client connection manager.
-  - [ ] Validate database connection URI using Zod.
-  - [ ] Implement connection lifecycle handling (connect, disconnect, reconnect, health check).
-  - **Acceptance Criteria:** API and worker connect to MongoDB and fail with clear configuration error when DB is unavailable.
+- [x] **Task 2.1 — MongoDB connection**
+  - [x] Create `packages/database` package.
+  - [x] Add MongoDB / Mongoose client connection manager.
+  - [x] Validate database connection URI using Zod.
+  - [x] Implement connection lifecycle handling (connect, disconnect, reconnect, health check).
+  - **Acceptance Criteria:** API and worker connect to MongoDB and fail with clear configuration error when DB is unavailable. (PASSED ✅)
 
 - [ ] **Task 2.2 — Core collections & models**
   - [ ] Implement `User` model & schema.

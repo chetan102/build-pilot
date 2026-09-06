@@ -225,6 +225,9 @@ importers:
       mongoose:
         specifier: ^8.9.2
         version: 8.24.4
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: ^20.17.10

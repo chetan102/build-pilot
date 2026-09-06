@@ -17,7 +17,8 @@
     "@buildpilot/domain": "workspace:*",
     "@buildpilot/observability": "workspace:*",
     "mongodb": "^6.12.0",
-    "mongoose": "^8.9.2"
+    "mongoose": "^8.9.2",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@types/node": "^20.17.10",
