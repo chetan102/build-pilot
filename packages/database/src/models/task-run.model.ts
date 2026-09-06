@@ -7,6 +7,7 @@ import {
 } from '@buildpilot/domain';
 
 export interface ITaskRun {
+  _id?: string;
   taskId: string;
   status: TaskRunStatusType;
   branch: string;

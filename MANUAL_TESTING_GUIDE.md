@@ -25,6 +25,7 @@
   - [Task 3.2: Task & Project API (4-Tier Architecture)](#task-32-task--project-api-4-tier-architecture)
 - [Phase 4 — Queue + Worker](#phase-4--queue--worker)
   - [Task 4.1: Redis + BullMQ Queue Engine](#task-41-redis--bullmq-queue-setup)
+  - [Task 4.2: Worker Service Foundation & State Persistence](#task-42-worker-service-foundation--state-persistence)
 
 ---
 
@@ -439,6 +440,130 @@ The background worker instantly consumes the job from Redis with correlated `job
 [INFO] (agent-worker): Processing engineering task job
 [INFO] (task-worker): Job execution completed successfully
 ```
+
+---
+
+### Task 4.2: Worker Service Foundation & State Persistence
+
+#### 📂 Key Files to Study:
+- [`apps/worker/src/worker.ts`](./apps/worker/src/worker.ts) — Worker service implementation, atomic state transition lifecycle, and shutdown handling.
+- [`packages/database/src/repositories/task-run.repository.ts`](./packages/database/src/repositories/task-run.repository.ts) — `TaskRunRepository` with atomic create, status updates, completion, and failure tracking.
+- [`packages/queue/src/worker.ts`](./packages/queue/src/worker.ts) — BullMQ `Worker` encapsulation, concurrency throttling, and connection options.
+
+#### 🔄 Worker Execution & Persistence Flow:
+```mermaid
+sequenceDiagram
+    autonumber
+    participant API as apps/api
+    participant Redis as Redis Queue (BullMQ)
+    participant Worker as apps/worker
+    participant DB as MongoDB (Tasks / Runs / Events)
+
+    API->>Redis: 1. enqueueTask({ taskId, runId, branch, ... })
+    Redis-->>Worker: 2. Redis BLMOVE wakes Worker with Job
+    Worker->>DB: 3. Create TaskRun (status: RUNNING, startedAt)
+    Worker->>DB: 4. Update Task (status: PLANNING, activeRunId: runId)
+    Worker->>DB: 5. Insert Event (type: TASK_RUN_STARTED)
+    Note over Worker: 6. Execute Agent Workflow Pipeline
+    alt Job Succeeded
+        Worker->>DB: 7a. Update TaskRun (status: COMPLETED, durationMs)
+        Worker->>DB: 8a. Update Task (status: COMPLETED, completedRunId: runId)
+        Worker->>DB: 9a. Insert Event (type: TASK_RUN_COMPLETED)
+    else Job Failed (e.g. rate limit / build error)
+        Worker->>DB: 7b. Update TaskRun (status: FAILED, errorMessage)
+        Worker->>DB: 8b. Insert Event (type: TASK_RUN_FAILED)
+        Worker->>DB: 9b. Update Task (status: FAILED if attempts exhausted)
+    end
+```
+
+#### 💡 Core Concepts & Why It's Built This Way:
+- **Task vs TaskRun Entity Separation**: A `Task` represents the persistent business issue (e.g. "Fix auth token bug"). A `TaskRun` represents a specific execution attempt with its own LLM provider, prompt parameters, duration, and error trace. Retrying a task spawns a new `TaskRun` without losing history of previous attempts.
+- **Atomic State Transitions**: Status transitions (`QUEUED` $\rightarrow$ `PLANNING` $\rightarrow$ `COMPLETED`/`FAILED`) are persisted in MongoDB at each milestone, ensuring the control plane reflects the exact state of work even if the host abruptly restarts.
+- **Audit Trail via Events Collection**: Every key lifecycle event (`TASK_RUN_STARTED`, `TASK_RUN_COMPLETED`, `TASK_RUN_FAILED`) is logged to the `events` collection with microsecond timestamps, powering the real-time activity stream on the web dashboard.
+- **Graceful Shutdown & Active Job Drainage**: On `SIGTERM` / `SIGINT`, the worker immediately pauses intake of new jobs from Redis (`worker.pause()`), waits for actively executing jobs to finish cleanly (`worker.close()`), disconnects the MongoDB client, and exits with code 0.
+
+#### 🧪 How to Manually Run & Test:
+
+##### Step 1: Ensure Containers & Services Are Running
+In Terminal 1 (API):
+```bash
+pnpm run dev:api
+```
+
+In Terminal 2 (Worker):
+```bash
+pnpm run dev:worker
+```
+
+##### Step 2: Create a Project (if not created yet) in Terminal 3
+```bash
+curl -s -X POST http://localhost:4000/api/v1/projects \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Backend Service",
+    "slug": "backend-service",
+    "ownerId": "user_demo"
+  }' | jq .
+```
+
+##### Step 3: Dispatch an Engineering Task to the Queue
+```bash
+curl -s -X POST http://localhost:4000/api/v1/projects/backend-service/tasks \
+  -H "Content-Type: application/json" \
+  -d '{
+    "repositoryId": "repo_demo",
+    "title": "Optimize DB Query Indexing",
+    "description": "Add compound index for faster lookup"
+  }' | jq .
+```
+**Capture the `_id` from the output as `TASK_ID` (e.g. `6a9cf2425d9b845db6781a18`).**
+
+##### Step 4: Verify Worker Processed and Persisted the Job
+Observe Terminal 2 (Worker) — notice the structured logs tracking the complete lifecycle:
+```text
+[INFO] (agent-worker): Worker picked up engineering task job (taskId: "...", runId: "...")
+[INFO] (agent-worker): Executing agent workflow pipeline (placeholder for Phase 5)
+[INFO] (agent-worker): Job execution completed successfully (durationMs: ...)
+```
+
+##### Step 5: Query Task Details & Verify `TaskRun` in MongoDB via API
+```bash
+curl -s http://localhost:4000/api/v1/tasks/<TASK_ID> | jq .
+```
+**Expected Output:**
+```json
+{
+  "task": {
+    "_id": "<TASK_ID>",
+    "title": "Optimize DB Query Indexing",
+    "status": "COMPLETED",
+    "activeRunId": "<RUN_ID>",
+    "completedRunId": "<RUN_ID>"
+  },
+  "runs": [
+    {
+      "_id": "<RUN_ID>",
+      "taskId": "<TASK_ID>",
+      "status": "COMPLETED",
+      "provider": "OPENROUTER",
+      "model": "anthropic/claude-3.5-sonnet",
+      "maxSteps": 30,
+      "durationMs": 12
+    }
+  ],
+  "steps": []
+}
+```
+
+##### Step 6: Test Graceful Worker Shutdown
+In Terminal 2, press `Ctrl+C`:
+```text
+^C
+[INFO] (agent-worker): Stopping Agent Worker Service gracefully...
+[INFO] (agent-worker): Agent Worker Service stopped cleanly
+```
+The worker gracefully drains in-flight jobs, disconnects from MongoDB and Redis, and terminates without errors.
+
 
 
 

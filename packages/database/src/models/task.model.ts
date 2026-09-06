@@ -2,6 +2,7 @@ import mongoose, { Schema, Model } from 'mongoose';
 import { TaskStatus, TaskStatusType } from '@buildpilot/domain';
 
 export interface ITask {
+  _id?: string;
   projectId: string;
   repositoryId: string;
   issueNumber: number;

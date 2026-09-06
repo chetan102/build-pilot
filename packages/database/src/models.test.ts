@@ -225,4 +225,19 @@ describe('Mongoose Models Schema Verification', () => {
     expect(agentDef.validateSync()).toBeUndefined();
     expect(agentDef.isDefault).toBe(true);
   });
+
+  it('verifies TaskRunRepository interface and method bindings', async () => {
+    const { taskRunRepository, TaskRunRepository } = await import('./repositories/task-run.repository.js');
+    expect(taskRunRepository).toBeDefined();
+    expect(taskRunRepository).toBeInstanceOf(TaskRunRepository);
+    expect(typeof taskRunRepository.create).toBe('function');
+    expect(typeof taskRunRepository.findById).toBe('function');
+    expect(typeof taskRunRepository.findByTaskId).toBe('function');
+    expect(typeof taskRunRepository.findLatestByTaskId).toBe('function');
+    expect(typeof taskRunRepository.updateStatus).toBe('function');
+    expect(typeof taskRunRepository.markStarted).toBe('function');
+    expect(typeof taskRunRepository.markCompleted).toBe('function');
+    expect(typeof taskRunRepository.markFailed).toBe('function');
+  });
 });
+

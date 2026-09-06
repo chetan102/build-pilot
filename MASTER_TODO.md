@@ -166,14 +166,14 @@ Next TODO: <next unchecked task>
   - [x] Configure worker concurrency limits.
   - **Acceptance Criteria:** API can enqueue a task and worker consumes it exactly once per job execution attempt. (PASSED ✅)
 
-- [ ] **Task 4.2 — Worker service foundation**
-  - [ ] Create `apps/worker` (Node.js + TypeScript).
-  - [ ] Implement BullMQ worker processor loop.
-  - [ ] Add graceful shutdown with active job drainage.
-  - [ ] Add structured lifecycle logging (job start, progress, failure, completion).
-  - [ ] Persist `TaskRun` record and update `Task` status in MongoDB.
-  - [ ] Persist start/end/failure events to events collection.
-  - **Acceptance Criteria:** Creating a task in the API produces a background worker run without keeping an HTTP request open.
+- [x] **Task 4.2 — Worker service foundation**
+  - [x] Create `apps/worker` (Node.js + TypeScript).
+  - [x] Implement BullMQ worker processor loop.
+  - [x] Add graceful shutdown with active job drainage.
+  - [x] Add structured lifecycle logging (job start, progress, failure, completion).
+  - [x] Persist `TaskRun` record and update `Task` status in MongoDB.
+  - [x] Persist start/end/failure events to events collection.
+  - **Acceptance Criteria:** Creating a task in the API produces a background worker run without keeping an HTTP request open. (PASSED ✅)
 
 ---
 

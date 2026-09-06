@@ -1,6 +1,7 @@
 import mongoose, { Schema, Model } from 'mongoose';
 
 export interface IEvent {
+  _id?: string;
   taskId?: string;
   runId?: string;
   type: string;

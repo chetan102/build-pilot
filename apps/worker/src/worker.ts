@@ -1,11 +1,21 @@
 import { createLogger, Logger } from '@buildpilot/observability';
 import { loadConfig } from '@buildpilot/config';
-import { connectToDatabase, disconnectDatabase } from '@buildpilot/database';
+import {
+  connectToDatabase,
+  disconnectDatabase,
+  taskRepository as defaultTaskRepository,
+  taskRunRepository as defaultTaskRunRepository,
+  eventRepository as defaultEventRepository,
+  TaskRepository,
+  TaskRunRepository,
+  EventRepository,
+} from '@buildpilot/database';
 import {
   TaskWorkerManager,
   EngineeringTaskJobPayload,
   DEFAULT_WORKER_CONCURRENCY,
 } from '@buildpilot/queue';
+import { TaskStatus, TaskRunStatus, LLMProviderType } from '@buildpilot/domain';
 import { Job } from 'bullmq';
 
 const config = loadConfig();
@@ -13,15 +23,41 @@ const config = loadConfig();
 export interface WorkerServiceOptions {
   logger?: Logger;
   concurrency?: number;
+  taskRepository?: TaskRepository;
+  taskRunRepository?: TaskRunRepository;
+  eventRepository?: EventRepository;
+  jobExecutor?: (
+    payload: EngineeringTaskJobPayload,
+    job: Job<EngineeringTaskJobPayload>,
+  ) => Promise<{ success: boolean; output?: Record<string, unknown> }>;
+}
+
+export interface JobExecutionResult {
+  success: boolean;
+  taskId: string;
+  runId: string;
+  durationMs?: number;
+  output?: Record<string, unknown>;
 }
 
 export class WorkerService {
   private workerManager: TaskWorkerManager | null = null;
   private logger: Logger;
   private isRunning = false;
+  private taskRepo: TaskRepository;
+  private taskRunRepo: TaskRunRepository;
+  private eventRepo: EventRepository;
+  private jobExecutor?: (
+    payload: EngineeringTaskJobPayload,
+    job: Job<EngineeringTaskJobPayload>,
+  ) => Promise<{ success: boolean; output?: Record<string, unknown> }>;
 
   constructor(private options: WorkerServiceOptions = {}) {
     this.logger = options.logger || createLogger({ serviceName: 'agent-worker' });
+    this.taskRepo = options.taskRepository || defaultTaskRepository;
+    this.taskRunRepo = options.taskRunRepository || defaultTaskRunRepository;
+    this.eventRepo = options.eventRepository || defaultEventRepository;
+    this.jobExecutor = options.jobExecutor;
   }
 
   async start(): Promise<void> {
@@ -56,19 +92,139 @@ export class WorkerService {
     );
   }
 
-  async processJob(job: Job<EngineeringTaskJobPayload>): Promise<{ success: boolean; taskId: string; runId: string }> {
-    const { taskId, runId, title, branch } = job.data;
+  async processJob(job: Job<EngineeringTaskJobPayload>): Promise<JobExecutionResult> {
+    const { taskId, runId, title, branch, provider, model, maxSteps, correlationId } = job.data;
+    const attempt = job.attemptsMade + 1;
+    const startTime = Date.now();
+
     this.logger.info(
-      { jobId: job.id, taskId, runId, title, branch, attempt: job.attemptsMade + 1 },
-      'Processing engineering task job',
+      { jobId: job.id, taskId, runId, title, branch, attempt },
+      'Worker picked up engineering task job',
     );
 
-    // Placeholder execution until agent runtime / sandbox executes in later phases
-    return {
-      success: true,
-      taskId,
-      runId,
-    };
+    try {
+      // 1. Initialize / persist TaskRun state
+      const existingRun = await this.taskRunRepo.findById(runId);
+      if (!existingRun) {
+        await this.taskRunRepo.create({
+          _id: runId,
+          taskId,
+          status: TaskRunStatus.RUNNING,
+          branch,
+          provider: provider || LLMProviderType.OPENROUTER,
+          model: model || 'anthropic/claude-3.5-sonnet',
+          maxSteps: maxSteps || 30,
+          startedAt: new Date(),
+        });
+      } else {
+        await this.taskRunRepo.markStarted(runId, new Date());
+      }
+
+      // 2. Transition Task status to PLANNING (active execution phase)
+      await this.taskRepo.updateStatus(taskId, TaskStatus.PLANNING, {
+        activeRunId: runId,
+      });
+
+      // 3. Record TASK_RUN_STARTED event
+      await this.eventRepo.create({
+        taskId,
+        runId,
+        type: 'TASK_RUN_STARTED',
+        payload: {
+          jobId: job.id,
+          attempt,
+          branch,
+          provider: provider || LLMProviderType.OPENROUTER,
+          model: model || 'anthropic/claude-3.5-sonnet',
+          correlationId,
+        },
+        level: 'info',
+      });
+
+      // 4. Execute the agent workflow (custom executor or placeholder)
+      let executionOutput: Record<string, unknown> | undefined;
+      if (this.jobExecutor) {
+        const res = await this.jobExecutor(job.data, job);
+        if (!res.success) {
+          throw new Error('Agent execution failed during step processing');
+        }
+        executionOutput = res.output;
+      } else {
+        // Placeholder execution until agent runtime / tools execute in Phase 5
+        this.logger.info(
+          { taskId, runId, branch },
+          'Executing agent workflow pipeline (placeholder for Phase 5)',
+        );
+      }
+
+      const durationMs = Date.now() - startTime;
+
+      // 5. Mark TaskRun as COMPLETED
+      await this.taskRunRepo.markCompleted(runId, durationMs);
+
+      // 6. Transition Task to COMPLETED (or next stage)
+      await this.taskRepo.updateStatus(taskId, TaskStatus.COMPLETED, {
+        completedRunId: runId,
+      });
+
+      // 7. Record TASK_RUN_COMPLETED event
+      await this.eventRepo.create({
+        taskId,
+        runId,
+        type: 'TASK_RUN_COMPLETED',
+        payload: {
+          durationMs,
+          attempt,
+          ...(executionOutput ? { output: executionOutput } : {}),
+        },
+        level: 'info',
+      });
+
+      this.logger.info(
+        { jobId: job.id, taskId, runId, durationMs },
+        'Job execution completed successfully',
+      );
+
+      return {
+        success: true,
+        taskId,
+        runId,
+        durationMs,
+        output: executionOutput,
+      };
+    } catch (err: any) {
+      const durationMs = Date.now() - startTime;
+      const errorMessage = err instanceof Error ? err.message : String(err);
+
+      this.logger.error(
+        { jobId: job.id, taskId, runId, attempt, err, durationMs },
+        'Job execution failed with error',
+      );
+
+      // Record failure on TaskRun
+      await this.taskRunRepo.markFailed(runId, errorMessage, durationMs);
+
+      // Record TASK_RUN_FAILED event
+      await this.eventRepo.create({
+        taskId,
+        runId,
+        type: 'TASK_RUN_FAILED',
+        payload: {
+          errorMessage,
+          durationMs,
+          attempt,
+        },
+        level: 'error',
+      });
+
+      // If attempts exhausted, transition Task to FAILED
+      const maxAttempts = job.opts?.attempts ?? 3;
+      if (attempt >= maxAttempts) {
+        await this.taskRepo.updateStatus(taskId, TaskStatus.FAILED);
+      }
+
+      throw err;
+    }
   }
 
   async stop(): Promise<void> {
