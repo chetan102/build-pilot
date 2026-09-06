@@ -179,14 +179,14 @@ Next TODO: <next unchecked task>
 
 ## Phase 5 — LLM Provider Layer
 
-- [ ] **Task 5.1 — Generic provider contract**
-  - [ ] Create `packages/llm` package.
-  - [ ] Define `LLMProvider` interface (`generate`, `stream`, `supports`).
-  - [ ] Define `LLMRequest`, `LLMResponse`, `LLMMessage`, `ToolDefinition` types.
-  - [ ] Define normalized tool-call and tool-result representation.
-  - [ ] Define normalized provider error hierarchy (`RateLimitError`, `AuthError`, `InvalidRequestError`, `ProviderTimeoutError`).
-  - [ ] Implement `ProviderFactory` for dynamic provider instantiation.
-  - **Acceptance Criteria:** Agent code depends exclusively on the internal `LLMProvider` interface.
+- [x] **Task 5.1 — Generic provider contract**
+  - [x] Create `packages/llm` package.
+  - [x] Define `LLMProvider` interface (`generate`, `stream`, `supports`).
+  - [x] Define `LLMRequest`, `LLMResponse`, `LLMMessage`, `ToolDefinition` types.
+  - [x] Define normalized tool-call and tool-result representation.
+  - [x] Define normalized provider error hierarchy (`RateLimitError`, `AuthError`, `InvalidRequestError`, `ProviderTimeoutError`).
+  - [x] Implement `ProviderFactory` for dynamic provider instantiation.
+  - **Acceptance Criteria:** Agent code depends exclusively on the internal `LLMProvider` interface. (PASSED ✅)
 
 - [ ] **Task 5.2 — OpenRouter provider adapter**
   - [ ] Implement `OpenRouterProvider` adapter using OpenRouter API standard.

@@ -26,6 +26,8 @@
 - [Phase 4 — Queue + Worker](#phase-4--queue--worker)
   - [Task 4.1: Redis + BullMQ Queue Engine](#task-41-redis--bullmq-queue-setup)
   - [Task 4.2: Worker Service Foundation & State Persistence](#task-42-worker-service-foundation--state-persistence)
+- [Phase 5 — LLM Provider Layer](#phase-5--llm-provider-layer)
+  - [Task 5.1: Generic Provider Contract & Factory Architecture](#task-51-generic-provider-contract--factory-architecture)
 
 ---
 
@@ -563,6 +565,77 @@ In Terminal 2, press `Ctrl+C`:
 [INFO] (agent-worker): Agent Worker Service stopped cleanly
 ```
 The worker gracefully drains in-flight jobs, disconnects from MongoDB and Redis, and terminates without errors.
+
+---
+
+## Phase 5 — LLM Provider Layer
+
+### Task 5.1: Generic Provider Contract & Factory Architecture
+
+#### 📂 Key Files to Study:
+- [`packages/llm/src/interfaces.ts`](./packages/llm/src/interfaces.ts) — Generic `LLMProvider` contract (`generate`, `stream`, `supports`, `getCapabilities`).
+- [`packages/llm/src/types.ts`](./packages/llm/src/types.ts) — Normalized `LLMRequest`, `LLMResponse`, `ToolDefinition`, `ToolCall`, `ToolResult`, and token usage data types.
+- [`packages/llm/src/factory.ts`](./packages/llm/src/factory.ts) — `ProviderFactory` dynamic registry, instantiation, and instance caching.
+- [`packages/llm/src/errors.ts`](./packages/llm/src/errors.ts) — Normalized provider error hierarchy (`RateLimitError`, `AuthError`, `InvalidRequestError`, `ProviderTimeoutError`, `ContextWindowExceededError`).
+- [`packages/llm/src/base-provider.ts`](./packages/llm/src/base-provider.ts) — `BaseLLMProvider` abstract template and `MockLLMProvider` for offline testing.
+
+#### 🔄 LLM Provider Contract Architecture:
+```mermaid
+flowchart TD
+    subgraph Agent_Runtime["Agent Runtime (apps/worker)"]
+        AgentLoop["Agent Core Loop (Phase 6)"]
+        Context["Context Builder (Phase 6)"]
+    end
+
+    subgraph Generic_Contract["Generic LLM Contract (@buildpilot/llm)"]
+        LLMProvider["interface LLMProvider\n(generate, stream, supports)"]
+        Types["Normalized Data Types\n(LLMRequest, LLMResponse, ToolCall, ToolResult)"]
+        Errors["Normalized Error Hierarchy\n(RateLimitError, AuthError, TimeoutError)"]
+        Factory["ProviderFactory\n(Dynamic Registry & Cache)"]
+    end
+
+    subgraph Provider_Adapters["Provider Adapters (Phase 5)"]
+        OpenRouter["OpenRouterProvider\n(Task 5.2)"]
+        OpenAI["OpenAICompatibleProvider\n(Task 5.3)"]
+        Anthropic["AnthropicProvider"]
+        Mock["MockLLMProvider\n(Offline & CI)"]
+    end
+
+    AgentLoop -->|Calls generate() / stream()| LLMProvider
+    Context -->|Constructs| Types
+    AgentLoop -.->|Handles normalized errors| Errors
+    AgentLoop -->|Requests provider instance| Factory
+    Factory -->|Instantiates| OpenRouter
+    Factory -->|Instantiates| OpenAI
+    Factory -->|Instantiates| Anthropic
+    Factory -->|Instantiates| Mock
+```
+
+#### 💡 Core Concepts & Why It's Built This Way:
+- **Dependency Inversion Principle (DIP)**: Agent code depends strictly on the abstract `LLMProvider` interface, never on third-party vendor SDKs (`openai`, `@anthropic-ai/sdk`, `@google/genai`). Switching between OpenRouter, local Ollama, Groq, or OpenAI requires zero changes to the agent loop.
+- **Normalized Tool Calling Standard**: Different LLM vendors represent tool calls differently (e.g. OpenAI's `tool_calls` vs Anthropic's `tool_use` blocks vs Gemini's `functionCall`). `@buildpilot/llm` unifies them into standard `ToolDefinition`, `ToolCall`, and `ToolResult` schemas.
+- **Normalized Error Hierarchy**: Vendor-specific HTTP status codes and JSON error objects are parsed into standard error classes (`RateLimitError`, `AuthError`, `ProviderTimeoutError`, `ContextWindowExceededError`) with explicit `retryable: boolean` flags. This tells BullMQ queue workers and agent loops whether to back off and retry or fail immediately.
+- **Dynamic Factory & Offline Mockability**: `providerFactory` provides decoupled registration and instance caching. Built-in `MockLLMProvider` enables 100% offline unit tests and CI testing without needing live API tokens or spending LLM credits.
+
+#### 🧪 How to Manually Run & Test:
+
+##### Step 1: Run the LLM Package Test Suite
+```bash
+pnpm --filter @buildpilot/llm test
+```
+**Expected Output:**
+```text
+ ✓ src/index.test.ts (19 tests)
+ Test Files  1 passed (1)
+      Tests  19 passed (19)
+```
+
+##### Step 2: Verify Monorepo Full Typecheck & Build
+```bash
+pnpm run typecheck && pnpm run build
+```
+Verify that all 12 monorepo packages compile cleanly without type mismatches.
+
 
 
 
