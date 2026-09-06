@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
+import type { ReactNode } from 'react';
 import './globals.css';
+import { AppShell } from '@/components/layout/app-shell';
 
 export const metadata: Metadata = {
   title: 'BuildPilot — AI Engineering Control Plane',
@@ -9,12 +11,13 @@ export const metadata: Metadata = {
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <body className="antialiased bg-slate-50 text-slate-900 min-h-screen">
+        <AppShell>{children}</AppShell>
+      </body>
     </html>
   );
 }
-

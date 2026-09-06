@@ -12,7 +12,7 @@ describe('API Health Check', () => {
     });
 
     let statusCode = 200;
-    let responseBody: any = null;
+    let responseBody: Record<string, unknown> = {};
     const responseHeaders: Record<string, string> = {};
 
     const res = Object.assign(new EventEmitter(), {
@@ -26,11 +26,11 @@ describe('API Health Check', () => {
         statusCode = code;
         return this;
       },
-      json(data: any) {
+      json(data: Record<string, unknown>) {
         responseBody = data;
         return this;
       },
-      send(data: any) {
+      send(data: Record<string, unknown>) {
         responseBody = data;
         return this;
       },
@@ -39,12 +39,12 @@ describe('API Health Check', () => {
       },
     });
 
-    app(req as any, res as any);
+    app(req as unknown as Parameters<typeof app>[0], res as unknown as Parameters<typeof app>[1]);
 
     expect(statusCode).toBe(200);
     expect(responseBody).toBeDefined();
-    expect(responseBody.status).toBe('ok');
-    expect(responseBody.service).toBe('control-api');
+    expect(responseBody['status']).toBe('ok');
+    expect(responseBody['service']).toBe('control-api');
     expect(responseHeaders['x-correlation-id']).toBeDefined();
   });
 });

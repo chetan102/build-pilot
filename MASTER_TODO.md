@@ -9,9 +9,9 @@
 ## 📊 Overall Progress Summary
 
 - **Current Phase:** Phase 1 — Web Dashboard Shell
-- **Current Task:** Task 1.1 — Next.js application
-- **Project Status:** 🟢 IN PROGRESS (Phase 0: 100% Complete ✅ | Phase 1: 0% Complete)
-- **Completed Tasks:** 2 / 23 Phases (Phase 0 complete)
+- **Current Task:** Task 1.2 — Domain types
+- **Project Status:** 🟢 IN PROGRESS (Phase 0: 100% Complete ✅ | Phase 1: 50% Complete)
+- **Completed Tasks:** 3 / 23 Phases (Task 0.1, 0.2, 1.1 complete)
 
 ---
 
@@ -70,19 +70,20 @@ Next TODO: <next unchecked task>
 
 ## Phase 1 — Web Dashboard Shell
 
-- [ ] **Task 1.1 — Next.js application**
-  - [ ] Create `apps/web` (Next.js + React + TypeScript).
-  - [ ] Configure TypeScript and path aliases.
-  - [ ] Configure Tailwind CSS.
-  - [ ] Install and configure shadcn/ui components (Button, Card, Badge, Dialog, Table, Tabs, etc.).
-  - [ ] Create application layout shell (Sidebar, Header, Main Content Area, Theme Provider).
-  - [ ] Add application routes:
-    - [ ] `/dashboard` (overview metrics & recent tasks).
-    - [ ] `/projects` (project & repository management).
-    - [ ] `/tasks` (kanban & table task board).
-    - [ ] `/settings/providers` (LLM provider management).
-  - [ ] Build mock task board supporting all task states (Queued, Planning, Development, Testing, Review, Completed, Failed).
-  - **Acceptance Criteria:** Dashboard runs locally (`pnpm --filter web dev`) and displays the complete task lifecycle UI using mock data.
+- [x] **Task 1.1 — Next.js application**
+  - [x] Create `apps/web` (Next.js + React + TypeScript).
+  - [x] Configure TypeScript and path aliases.
+  - [x] Configure Tailwind CSS.
+  - [x] Install and configure shadcn/ui components (Button, Card, Badge, Dialog, Table, Tabs, Input, Progress, etc.).
+  - [x] Create application layout shell (Sidebar, Header, Main Content Area, Theme Provider).
+  - [x] Add application routes:
+    - [x] `/dashboard` (overview metrics & recent tasks).
+    - [x] `/projects` (project & repository management).
+    - [x] `/tasks` (kanban & table task board).
+    - [x] `/tasks/[taskId]` (agent step timeline, tool calls, git diff, test run logs, high-risk approval banner).
+    - [x] `/settings/providers` (LLM provider management).
+  - [x] Build mock task board supporting all task states (Queued, Planning, Development, Testing, Awaiting Approval, Completed, Failed).
+  - **Acceptance Criteria:** Dashboard runs locally (`pnpm --filter web dev`) and displays the complete task lifecycle UI using mock data. (PASSED ✅)
 
 - [ ] **Task 1.2 — Domain types**
   - [ ] Create `packages/domain` package.
