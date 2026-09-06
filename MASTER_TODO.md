@@ -8,10 +8,10 @@
 
 ## 📊 Overall Progress Summary
 
-- **Current Phase:** Phase 2 — Database Layer
-- **Current Task:** Task 2.2 — Core collections & models
-- **Project Status:** 🟢 IN PROGRESS (Phase 0: 100% Complete ✅ | Phase 1: 100% Complete ✅ | Phase 2: 50% Complete)
-- **Completed Tasks:** 5 / 23 Phases (Task 0.1, 0.2, 1.1, 1.2, 2.1 complete)
+- **Current Phase:** Phase 3 — Control API
+- **Current Task:** Task 3.1 — Express application
+- **Project Status:** 🟢 IN PROGRESS (Phase 0: 100% Complete ✅ | Phase 1: 100% Complete ✅ | Phase 2: 100% Complete ✅ | Phase 3: 0% Complete)
+- **Completed Tasks:** 6 / 23 Phases (Task 0.1, 0.2, 1.1, 1.2, 2.1, 2.2 complete)
 
 ---
 
@@ -105,26 +105,26 @@ Next TODO: <next unchecked task>
   - [x] Implement connection lifecycle handling (connect, disconnect, reconnect, health check).
   - **Acceptance Criteria:** API and worker connect to MongoDB and fail with clear configuration error when DB is unavailable. (PASSED ✅)
 
-- [ ] **Task 2.2 — Core collections & models**
-  - [ ] Implement `User` model & schema.
-  - [ ] Implement `Project` model & schema.
-  - [ ] Implement `Repository` model & schema.
-  - [ ] Implement `GitHubInstallation` model & schema.
-  - [ ] Implement `ProviderCredential` model & schema.
-  - [ ] Implement `AgentDefinition` model & schema.
-  - [ ] Implement `Task` model & schema.
-  - [ ] Implement `TaskRun` model & schema.
-  - [ ] Implement `AgentStep` model & schema.
-  - [ ] Implement `ToolCall` model & schema.
-  - [ ] Implement `TestRun` model & schema.
-  - [ ] Implement `Artifact` model & schema.
-  - [ ] Implement `Approval` model & schema.
-  - [ ] Implement `PullRequest` model & schema.
-  - [ ] Implement `Event` model & schema.
-  - [ ] Implement `EvaluationResult` model & schema.
-  - [ ] Add database indexes (task status, repo + task state, task + run, chronological events).
-  - [ ] Write repository CRUD tests.
-  - **Acceptance Criteria:** CRUD repository tests cover each core entity and indexes are verified.
+- [x] **Task 2.2 — Core collections & models**
+  - [x] Implement `User` model & schema.
+  - [x] Implement `Project` model & schema.
+  - [x] Implement `Repository` model & schema.
+  - [x] Implement `GitHubInstallation` model & schema.
+  - [x] Implement `ProviderCredential` model & schema.
+  - [x] Implement `AgentDefinition` model & schema.
+  - [x] Implement `Task` model & schema.
+  - [x] Implement `TaskRun` model & schema.
+  - [x] Implement `AgentStep` model & schema.
+  - [x] Implement `ToolCall` model & schema.
+  - [x] Implement `TestRun` model & schema.
+  - [x] Implement `Artifact` model & schema.
+  - [x] Implement `Approval` model & schema.
+  - [x] Implement `PullRequest` model & schema.
+  - [x] Implement `Event` model & schema.
+  - [x] Implement `EvaluationResult` model & schema.
+  - [x] Add database indexes (task status, repo + task state, task + run, chronological events).
+  - [x] Write repository CRUD tests.
+  - **Acceptance Criteria:** CRUD repository tests cover each core entity and indexes are verified. (PASSED ✅)
 
 ---
 
