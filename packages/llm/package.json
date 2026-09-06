@@ -10,6 +10,7 @@
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:openrouter": "node dist/scripts/test-openrouter.js",
     "clean": "rm -rf dist"
   },
   "dependencies": {
@@ -20,8 +21,8 @@
   },
   "devDependencies": {
     "@types/node": "^20.17.10",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }
 }
-

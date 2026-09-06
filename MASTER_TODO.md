@@ -188,14 +188,14 @@ Next TODO: <next unchecked task>
   - [x] Implement `ProviderFactory` for dynamic provider instantiation.
   - **Acceptance Criteria:** Agent code depends exclusively on the internal `LLMProvider` interface. (PASSED ✅)
 
-- [ ] **Task 5.2 — OpenRouter provider adapter**
-  - [ ] Implement `OpenRouterProvider` adapter using OpenRouter API standard.
-  - [ ] Support text generation with system prompts and message history.
-  - [ ] Support tool/function definition passing and tool-call response parsing.
-  - [ ] Normalize OpenRouter error responses into standard error classes.
-  - [ ] Add configurable timeout and token usage metadata extraction.
-  - [ ] Write unit & integration test with mock and real/test endpoints.
-  - **Acceptance Criteria:** A standalone test script can send a prompt with tool definitions to a fixed OpenRouter model and receive a normalized tool call.
+- [x] **Task 5.2 — OpenRouter provider adapter**
+  - [x] Implement `OpenRouterProvider` adapter using OpenRouter API standard.
+  - [x] Support text generation with system prompts and message history.
+  - [x] Support tool/function definition passing and tool-call response parsing.
+  - [x] Normalize OpenRouter error responses into standard error classes.
+  - [x] Add configurable timeout and token usage metadata extraction.
+  - [x] Write unit & integration test with mock and real/test endpoints.
+  - **Acceptance Criteria:** A standalone test script can send a prompt with tool definitions to a fixed OpenRouter model and receive a normalized tool call. (PASSED ✅)
 
 - [ ] **Task 5.3 — OpenAI-compatible provider adapter**
   - [ ] Implement `OpenAICompatibleProvider` adapter supporting custom `baseURL` and API keys.

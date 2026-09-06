@@ -28,6 +28,7 @@
   - [Task 4.2: Worker Service Foundation & State Persistence](#task-42-worker-service-foundation--state-persistence)
 - [Phase 5 — LLM Provider Layer](#phase-5--llm-provider-layer)
   - [Task 5.1: Generic Provider Contract & Factory Architecture](#task-51-generic-provider-contract--factory-architecture)
+  - [Task 5.2: OpenRouter Provider Adapter & Tool Calling](#task-52-openrouter-provider-adapter--tool-calling)
 
 ---
 
@@ -635,6 +636,78 @@ pnpm --filter @buildpilot/llm test
 pnpm run typecheck && pnpm run build
 ```
 Verify that all 12 monorepo packages compile cleanly without type mismatches.
+
+---
+
+### Task 5.2: OpenRouter Provider Adapter & Tool Calling
+
+#### 📂 Key Files to Study:
+- [`packages/llm/src/openrouter.ts`](./packages/llm/src/openrouter.ts) — `OpenRouterProvider` adapter with system prompt prepending, tool definition formatting, response parsing, error normalization, and SSE streaming.
+- [`packages/llm/src/openrouter.test.ts`](./packages/llm/src/openrouter.test.ts) — Comprehensive unit test suite with mock fetch fixtures covering tool calling, rate limiting, and SSE streaming.
+- [`packages/llm/src/scripts/test-openrouter.ts`](./packages/llm/src/scripts/test-openrouter.ts) — Standalone CLI demonstration script.
+
+#### 🔄 OpenRouter Adapter Execution Flow:
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Agent as Agent Loop (apps/worker)
+    participant Adapter as OpenRouterProvider
+    participant OpenRouter as OpenRouter API (api/v1/chat/completions)
+
+    Agent->>Adapter: 1. generate({ model, messages, tools, systemPrompt })
+    Note over Adapter: 2. Formats messages + OpenAI tools schema
+    Adapter->>OpenRouter: 3. POST /chat/completions (JSON payload + Bearer Auth)
+    alt API Responds Successfully
+        OpenRouter-->>Adapter: 4a. 200 OK (choices with tool_calls / message content)
+        Note over Adapter: 5a. Normalizes tool_calls (JSON.parse arguments) + TokenUsage
+        Adapter-->>Agent: 6a. Returns normalized LLMResponse
+    else Rate Limited / Error
+        OpenRouter-->>Adapter: 4b. 429 Too Many Requests / 401 Auth Error
+        Note over Adapter: 5b. Maps status to RateLimitError / AuthError
+        Adapter-->>Agent: 6b. Throws normalized LLMError (with retryable flag)
+    end
+```
+
+#### 💡 Core Concepts & Why It's Built This Way:
+- **Unified Multi-Model Gateway**: OpenRouter provides a single standard API to route prompts to 200+ models (Anthropic Claude 3.5 Sonnet, OpenAI GPT-4o, DeepSeek-R1, Gemini 1.5 Pro) with consistent tool-calling semantics.
+- **Resilient Tool Argument Deserialization**: In tool calling, LLMs return tool arguments as stringified JSON. The adapter parses the JSON into typed JavaScript objects while gracefully preserving `rawArguments` if partial output is received.
+- **Automatic Status Code Normalization**: HTTP error responses are intercepted and transformed into strongly typed error classes:
+  - `401/403` $\rightarrow$ `AuthError` (`retryable: false`)
+  - `429` $\rightarrow$ `RateLimitError` (`retryable: true`)
+  - `400 (context limit)` $\rightarrow$ `ContextWindowExceededError` (`retryable: false`)
+  - `408/Timeout` $\rightarrow$ `ProviderTimeoutError` (`retryable: true`)
+  - `500+` $\rightarrow$ `ProviderUnavailableError` (`retryable: true`)
+- **SSE Stream Reader**: When streaming responses, the adapter uses native `ReadableStream` reader with line buffering to yield `LLMStreamChunk` objects in real time.
+
+#### 🧪 How to Manually Run & Test:
+
+##### Step 1: Run All Unit Tests for the LLM Package
+```bash
+pnpm --filter @buildpilot/llm test
+```
+**Expected Output:**
+```text
+ ✓ src/index.test.ts (19 tests)
+ ✓ src/openrouter.test.ts (13 tests)
+ Test Files  2 passed (2)
+      Tests  32 passed (32)
+```
+
+##### Step 2: Run the Standalone OpenRouter Demonstration Script
+```bash
+pnpm --filter @buildpilot/llm test:openrouter
+```
+**Expected Output (Without API Key - Safe Mock Demo):**
+```text
+ℹ️  No OPENROUTER_API_KEY found in environment. Running in mock demonstration mode.
+🚀 Initializing OpenRouterProvider with model: anthropic/claude-3.5-sonnet
+📤 Sending prompt with tool definitions...
+❌ Request error: Failed to reach OpenRouter API: fetch failed PROVIDER_UNAVAILABLE_ERROR
+💡 Note: Set OPENROUTER_API_KEY in your .env or shell to execute live network calls.
+```
+
+*(Optional: Set `export OPENROUTER_API_KEY=sk-or-v1-...` in your shell to execute live network calls against OpenRouter).*
+
 
 
 

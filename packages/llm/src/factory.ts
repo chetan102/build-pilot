@@ -3,6 +3,7 @@ import { LLMProvider } from './interfaces.js';
 import { ProviderConfig, ProviderConfigSchema } from './types.js';
 import { InvalidRequestError } from './errors.js';
 import { MockLLMProvider } from './base-provider.js';
+import { OpenRouterProvider } from './openrouter.js';
 
 export type ProviderConstructor = new (id: string, config: ProviderConfig) => LLMProvider;
 export type ProviderFactoryFn = (config: ProviderConfig) => LLMProvider;
@@ -18,6 +19,12 @@ export class ProviderFactory {
   private registerDefaults(): void {
     // Default registration for Mock Provider
     this.register('MOCK', (config) => new MockLLMProvider('mock:default', config));
+
+    // Default registration for OpenRouter Provider
+    this.register(LLMProviderType.OPENROUTER, (config) => {
+      const id = `openrouter:${config.defaultModel || 'default'}`;
+      return new OpenRouterProvider(id, config);
+    });
   }
 
   /**
@@ -130,4 +137,3 @@ export class ProviderFactory {
 }
 
 export const providerFactory = new ProviderFactory();
-
