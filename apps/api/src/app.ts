@@ -6,6 +6,8 @@ import { correlationIdMiddleware } from './middlewares/correlation-id.middleware
 import { notFoundMiddleware } from './middlewares/not-found.middleware.js';
 import { createErrorHandler } from './middlewares/error.middleware.js';
 import { healthRouter } from './routes/health.router.js';
+import { projectsRouter } from './routes/projects.router.js';
+import { tasksRouter } from './routes/tasks.router.js';
 
 export interface AppOptions {
   logger?: Logger;
@@ -39,6 +41,10 @@ export function createApp(options: AppOptions = {}): Express {
 
   // Health and Readiness
   app.use('/', healthRouter);
+
+  // Core API v1 routes
+  app.use('/api/v1/projects', projectsRouter);
+  app.use('/api/v1/tasks', tasksRouter);
 
   // Custom / feature routes
   if (options.routes) {

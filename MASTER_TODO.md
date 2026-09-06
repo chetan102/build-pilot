@@ -8,10 +8,10 @@
 
 ## 📊 Overall Progress Summary
 
-- **Current Phase:** Phase 3 — Control API
-- **Current Task:** Task 3.2 — Task & Project API
-- **Project Status:** 🟢 IN PROGRESS (Phase 0: 100% Complete ✅ | Phase 1: 100% Complete ✅ | Phase 2: 100% Complete ✅ | Phase 3: 50% Complete)
-- **Completed Tasks:** 7 / 23 Tasks (Task 0.1, 0.2, 1.1, 1.2, 2.1, 2.2, 3.1 complete)
+- **Current Phase:** Phase 4 — Queue + Worker
+- **Current Task:** Task 4.1 — Redis + BullMQ setup
+- **Project Status:** 🟢 IN PROGRESS (Phase 0: 100% Complete ✅ | Phase 1: 100% Complete ✅ | Phase 2: 100% Complete ✅ | Phase 3: 100% Complete ✅ | Phase 4: 0% Complete)
+- **Completed Tasks:** 8 / 23 Tasks (Task 0.1, 0.2, 1.1, 1.2, 2.1, 2.2, 3.1, 3.2 complete)
 
 ---
 
@@ -139,18 +139,18 @@ Next TODO: <next unchecked task>
   - [x] Add graceful shutdown handling (`SIGTERM`, `SIGINT`).
   - **Acceptance Criteria:** API starts, reports health, logs structured requests with correlation IDs, and shuts down cleanly. (PASSED ✅)
 
-- [ ] **Task 3.2 — Task & Project API**
-  - [ ] `POST /api/v1/projects` (create project).
-  - [ ] `GET /api/v1/projects` (list projects).
-  - [ ] `GET /api/v1/projects/:projectId` (get project details).
-  - [ ] `POST /api/v1/projects/:projectId/tasks` (create task manually).
-  - [ ] `GET /api/v1/tasks` (list tasks with pagination, status, and repository filters).
-  - [ ] `GET /api/v1/tasks/:taskId` (get detailed task with runs and steps).
-  - [ ] `POST /api/v1/tasks/:taskId/cancel` (cancel task).
-  - [ ] `POST /api/v1/tasks/:taskId/retry` (retry failed task).
-  - [ ] Validate all request inputs and query params with Zod schemas.
-  - [ ] Persist task state transition events on every mutation.
-  - **Acceptance Criteria:** A task can be created, queried, cancelled, and retried entirely through the API with full validation.
+- [x] **Task 3.2 — Task & Project API**
+  - [x] `POST /api/v1/projects` (create project).
+  - [x] `GET /api/v1/projects` (list projects).
+  - [x] `GET /api/v1/projects/:projectId` (get project details).
+  - [x] `POST /api/v1/projects/:projectId/tasks` (create task manually).
+  - [x] `GET /api/v1/tasks` (list tasks with pagination, status, and repository filters).
+  - [x] `GET /api/v1/tasks/:taskId` (get detailed task with runs and steps).
+  - [x] `POST /api/v1/tasks/:taskId/cancel` (cancel task).
+  - [x] `POST /api/v1/tasks/:taskId/retry` (retry failed task).
+  - [x] Validate all request inputs and query params with Zod schemas.
+  - [x] Persist task state transition events on every mutation.
+  - **Acceptance Criteria:** A task can be created, queried, cancelled, and retried entirely through the API with full validation. (PASSED ✅)
 
 ---
 
