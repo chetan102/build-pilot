@@ -6,11 +6,14 @@ import {
   TaskPaginationOptions,
   TaskDetailsResult,
 } from '@buildpilot/database';
+import mongoose from 'mongoose';
 import {
   EntityNotFoundError,
   TaskStatus,
   validateTaskTransition,
 } from '@buildpilot/domain';
+import { createLogger } from '@buildpilot/observability';
+import { taskQueueManager } from '../queue.js';
 
 export interface PaginatedTasksResult {
   tasks: ITask[];
@@ -100,15 +103,40 @@ export class TaskService {
       taskId,
       type: 'TASK_RETRIED',
       payload: {
-        previousStatus,
+        previousStatus: task.status,
         newStatus: TaskStatus.QUEUED,
       },
       level: 'info',
     });
+
+    // Enqueue task for background worker retry execution
+    try {
+      const runId = new mongoose.Types.ObjectId().toString();
+      await taskQueueManager.enqueueTask({
+        taskId,
+        runId,
+        projectId: task.projectId,
+        repositoryId: task.repositoryId,
+        issueNumber: task.issueNumber,
+        title: task.title,
+        description: task.description,
+        branch: task.branch,
+        baseBranch: task.baseBranch,
+        metadata: (task.metadata as Record<string, unknown>) || {},
+      });
+      createLogger({ serviceName: 'task-service' }).info(
+        { taskId, branch: task.branch },
+        'Retried task successfully enqueued into background worker queue',
+      );
+    } catch (err) {
+      createLogger({ serviceName: 'task-service' }).error(
+        { err, taskId },
+        'Failed to enqueue retried task into queue',
+      );
+    }
 
     return updated;
   }
 }
 
 export const taskService = new TaskService();
-

@@ -10,6 +10,7 @@ import {
   ITask,
 } from '@buildpilot/database';
 import { TaskStatus } from '@buildpilot/domain';
+import { taskQueueManager } from '../queue.js';
 
 interface MockResponse {
   statusCode: number;
@@ -87,6 +88,7 @@ describe('Projects & Tasks Layered API Architecture', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.spyOn(taskQueueManager, 'enqueueTask').mockResolvedValue({ id: 'task_1:run_1' } as any);
   });
 
   describe('Project Endpoints (Controller -> Service -> Repository)', () => {

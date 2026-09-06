@@ -19,6 +19,7 @@
     "@buildpilot/github": "workspace:*",
     "@buildpilot/llm": "workspace:*",
     "@buildpilot/observability": "workspace:*",
+    "@buildpilot/queue": "workspace:*",
     "@buildpilot/shared": "workspace:*",
     "@buildpilot/tools": "workspace:*",
     "bullmq": "^5.34.11",

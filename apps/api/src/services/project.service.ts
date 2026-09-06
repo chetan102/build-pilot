@@ -7,9 +7,12 @@ import {
   ListProjectsFilter,
   PaginationOptions,
 } from '@buildpilot/database';
+import mongoose from 'mongoose';
 import { EntityNotFoundError, DomainError, TaskStatus } from '@buildpilot/domain';
+import { createLogger, Logger } from '@buildpilot/observability';
 import { CreateProjectInput } from '../schemas/project.schema.js';
 import { CreateTaskInput } from '../schemas/task.schema.js';
+import { taskQueueManager } from '../queue.js';
 
 export interface PaginatedProjectsResult {
   projects: IProject[];
@@ -116,6 +119,32 @@ export class ProjectService {
       },
       level: 'info',
     });
+
+    // Enqueue task for background worker execution
+    try {
+      const runId = new mongoose.Types.ObjectId().toString();
+      await taskQueueManager.enqueueTask({
+        taskId,
+        runId,
+        projectId: (project as any)._id?.toString() || projectId,
+        repositoryId: task.repositoryId,
+        issueNumber: task.issueNumber,
+        title: task.title,
+        description: task.description,
+        branch: task.branch,
+        baseBranch: task.baseBranch,
+        metadata: (task.metadata as Record<string, unknown>) || {},
+      });
+      createLogger({ serviceName: 'project-service' }).info(
+        { taskId, branch: task.branch },
+        'Task successfully enqueued into background worker queue',
+      );
+    } catch (err) {
+      createLogger({ serviceName: 'project-service' }).error(
+        { err, taskId },
+        'Failed to enqueue task into queue',
+      );
+    }
 
     return task;
   }

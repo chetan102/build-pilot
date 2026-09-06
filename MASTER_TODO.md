@@ -9,9 +9,9 @@
 ## 📊 Overall Progress Summary
 
 - **Current Phase:** Phase 4 — Queue + Worker
-- **Current Task:** Task 4.1 — Redis + BullMQ setup
-- **Project Status:** 🟢 IN PROGRESS (Phase 0: 100% Complete ✅ | Phase 1: 100% Complete ✅ | Phase 2: 100% Complete ✅ | Phase 3: 100% Complete ✅ | Phase 4: 0% Complete)
-- **Completed Tasks:** 8 / 23 Tasks (Task 0.1, 0.2, 1.1, 1.2, 2.1, 2.2, 3.1, 3.2 complete)
+- **Current Task:** Task 4.2 — Worker service foundation
+- **Project Status:** 🟢 IN PROGRESS (Phase 0: 100% Complete ✅ | Phase 1: 100% Complete ✅ | Phase 2: 100% Complete ✅ | Phase 3: 100% Complete ✅ | Phase 4: 50% Complete)
+- **Completed Tasks:** 9 / 23 Tasks (Task 0.1, 0.2, 1.1, 1.2, 2.1, 2.2, 3.1, 3.2, 4.1 complete)
 
 ---
 
@@ -156,15 +156,15 @@ Next TODO: <next unchecked task>
 
 ## Phase 4 — Queue + Worker
 
-- [ ] **Task 4.1 — Redis + BullMQ setup**
-  - [ ] Add BullMQ queue connection in worker and API.
-  - [ ] Configure Redis connection with retry and health check.
-  - [ ] Create `engineering-task` queue.
-  - [ ] Define strongly-typed job payload schemas.
-  - [ ] Implement job ID = `taskId:runId` correlation.
-  - [ ] Configure retry policy, exponential backoff, and dead-letter handling.
-  - [ ] Configure worker concurrency limits.
-  - **Acceptance Criteria:** API can enqueue a task and worker consumes it exactly once per job execution attempt.
+- [x] **Task 4.1 — Redis + BullMQ setup**
+  - [x] Add BullMQ queue connection in worker and API.
+  - [x] Configure Redis connection with retry and health check.
+  - [x] Create `engineering-task` queue.
+  - [x] Define strongly-typed job payload schemas.
+  - [x] Implement job ID = `taskId:runId` correlation.
+  - [x] Configure retry policy, exponential backoff, and dead-letter handling.
+  - [x] Configure worker concurrency limits.
+  - **Acceptance Criteria:** API can enqueue a task and worker consumes it exactly once per job execution attempt. (PASSED ✅)
 
 - [ ] **Task 4.2 — Worker service foundation**
   - [ ] Create `apps/worker` (Node.js + TypeScript).

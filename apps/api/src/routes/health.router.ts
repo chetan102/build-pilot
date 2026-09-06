@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { dbManager } from '@buildpilot/database';
+import { redisConnectionManager } from '@buildpilot/queue';
 
 export const healthRouter: Router = Router();
 
@@ -13,19 +14,17 @@ healthRouter.get('/health', (_req: Request, res: Response) => {
 });
 
 healthRouter.get('/ready', async (_req: Request, res: Response) => {
-  const dbHealth = await dbManager.healthCheck();
+  const [dbHealth, redisHealth] = await Promise.all([
+    dbManager.healthCheck(),
+    redisConnectionManager.healthCheck(),
+  ]);
 
-  if (dbHealth.status === 'healthy') {
-    res.status(200).json({
-      status: 'ready',
-      database: dbHealth,
-      timestamp: new Date().toISOString(),
-    });
-  } else {
-    res.status(503).json({
-      status: 'not_ready',
-      database: dbHealth,
-      timestamp: new Date().toISOString(),
-    });
-  }
+  const isReady = dbHealth.status === 'healthy' && redisHealth.status === 'healthy';
+
+  res.status(isReady ? 200 : 503).json({
+    status: isReady ? 'ready' : 'not_ready',
+    database: dbHealth,
+    redis: redisHealth,
+    timestamp: new Date().toISOString(),
+  });
 });

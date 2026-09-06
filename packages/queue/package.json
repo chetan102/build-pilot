@@ -1,12 +1,12 @@
 {
-  "name": "@buildpilot/api",
+  "name": "@buildpilot/queue",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "dev": "tsx watch src/server.ts",
-    "start": "node dist/server.js",
+    "dev": "tsc --watch",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -14,24 +14,15 @@
   },
   "dependencies": {
     "@buildpilot/config": "workspace:*",
-    "@buildpilot/database": "workspace:*",
     "@buildpilot/domain": "workspace:*",
     "@buildpilot/observability": "workspace:*",
-    "@buildpilot/queue": "workspace:*",
     "@buildpilot/shared": "workspace:*",
-    "cors": "^2.8.5",
-    "express": "^4.21.2",
-    "mongoose": "^8.9.2",
-    "pino-http": "^10.4.0",
+    "bullmq": "^5.34.11",
+    "ioredis": "^5.4.2",
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@types/cors": "^2.8.17",
-    "@types/express": "^5.0.0",
     "@types/node": "^20.17.10",
-    "supertest": "^7.0.0",
-    "@types/supertest": "^6.0.2",
-    "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }
