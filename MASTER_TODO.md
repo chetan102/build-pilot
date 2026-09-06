@@ -9,9 +9,9 @@
 ## 📊 Overall Progress Summary
 
 - **Current Phase:** Phase 3 — Control API
-- **Current Task:** Task 3.1 — Express application
-- **Project Status:** 🟢 IN PROGRESS (Phase 0: 100% Complete ✅ | Phase 1: 100% Complete ✅ | Phase 2: 100% Complete ✅ | Phase 3: 0% Complete)
-- **Completed Tasks:** 6 / 23 Phases (Task 0.1, 0.2, 1.1, 1.2, 2.1, 2.2 complete)
+- **Current Task:** Task 3.2 — Task & Project API
+- **Project Status:** 🟢 IN PROGRESS (Phase 0: 100% Complete ✅ | Phase 1: 100% Complete ✅ | Phase 2: 100% Complete ✅ | Phase 3: 50% Complete)
+- **Completed Tasks:** 7 / 23 Tasks (Task 0.1, 0.2, 1.1, 1.2, 2.1, 2.2, 3.1 complete)
 
 ---
 
@@ -129,16 +129,15 @@ Next TODO: <next unchecked task>
 ---
 
 ## Phase 3 — Control API
-
-- [ ] **Task 3.1 — Express application**
-  - [ ] Create `apps/api` (Express.js + TypeScript).
-  - [ ] Configure environment config loading and Zod validation.
-  - [ ] Add request ID / correlation ID middleware.
-  - [ ] Add structured Pino HTTP request logging middleware.
-  - [ ] Add `/health` and `/ready` endpoints.
-  - [ ] Add global error handling and 404 middleware.
-  - [ ] Add graceful shutdown handling (`SIGTERM`, `SIGINT`).
-  - **Acceptance Criteria:** API starts, reports health, logs structured requests with correlation IDs, and shuts down cleanly.
+- [x] **Task 3.1 — Express application**
+  - [x] Create `apps/api` (Express.js + TypeScript).
+  - [x] Configure environment config loading and Zod validation.
+  - [x] Add request ID / correlation ID middleware.
+  - [x] Add structured Pino HTTP request logging middleware.
+  - [x] Add `/health` and `/ready` endpoints.
+  - [x] Add global error handling and 404 middleware.
+  - [x] Add graceful shutdown handling (`SIGTERM`, `SIGINT`).
+  - **Acceptance Criteria:** API starts, reports health, logs structured requests with correlation IDs, and shuts down cleanly. (PASSED ✅)
 
 - [ ] **Task 3.2 — Task & Project API**
   - [ ] `POST /api/v1/projects` (create project).

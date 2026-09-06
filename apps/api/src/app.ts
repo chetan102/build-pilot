@@ -1,55 +1,57 @@
-import express, { Express, Request, Response, NextFunction } from 'express';
+import express, { Express } from 'express';
 import cors from 'cors';
 import { pinoHttp } from 'pino-http';
-import { createLogger } from '@buildpilot/observability';
-import { generateCorrelationId } from '@buildpilot/shared';
+import { createLogger, Logger } from '@buildpilot/observability';
+import { correlationIdMiddleware } from './middlewares/correlation-id.middleware.js';
+import { notFoundMiddleware } from './middlewares/not-found.middleware.js';
+import { createErrorHandler } from './middlewares/error.middleware.js';
+import { healthRouter } from './routes/health.router.js';
 
-export function createApp(): Express {
-  const logger = createLogger({ serviceName: 'control-api' });
+export interface AppOptions {
+  logger?: Logger;
+  routes?: Array<{ path: string; handler: express.Router | express.RequestHandler }>;
+}
+
+export function createApp(options: AppOptions = {}): Express {
+  const logger = options.logger || createLogger({ serviceName: 'control-api' });
   const app = express();
 
+  // Basic security & parsing middleware
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true }));
 
-  // Attach correlation ID and logging
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    const correlationId = (req.headers['x-correlation-id'] as string) || generateCorrelationId('req');
-    res.setHeader('x-correlation-id', correlationId);
-    (req as Request & { correlationId?: string }).correlationId = correlationId;
-    next();
-  });
+  // Attach Correlation ID
+  app.use(correlationIdMiddleware);
 
+  // Structured request logging
   if (process.env.NODE_ENV !== 'test') {
     app.use(
       pinoHttp({
         logger,
-        genReqId: (req) => (req as Request & { correlationId?: string }).correlationId || generateCorrelationId('req'),
+        genReqId: (req) => req.correlationId,
+        autoLogging: {
+          ignore: (req) => req.url === '/health',
+        },
       }),
     );
   }
 
-  // Health check endpoint
-  app.get('/health', (_req: Request, res: Response) => {
-    res.json({
-      status: 'ok',
-      service: 'control-api',
-      timestamp: new Date().toISOString(),
-    });
-  });
+  // Health and Readiness
+  app.use('/', healthRouter);
 
-  app.get('/ready', (_req: Request, res: Response) => {
-    res.json({ status: 'ready' });
-  });
+  // Custom / feature routes
+  if (options.routes) {
+    for (const route of options.routes) {
+      app.use(route.path, route.handler);
+    }
+  }
 
-  // Global error handler
-  app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-    logger.error({ err }, 'Unhandled request error');
-    res.status(500).json({
-      error: 'Internal Server Error',
-      message: err.message,
-    });
-  });
+  // 404 Fallback
+  app.use(notFoundMiddleware);
+
+  // Global Error Handler
+  app.use(createErrorHandler(logger));
 
   return app;
 }
-
