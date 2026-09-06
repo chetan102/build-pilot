@@ -12,6 +12,10 @@
 - **Current Task:** Task 1.2 — Domain types
 - **Project Status:** 🟢 IN PROGRESS (Phase 0: 100% Complete ✅ | Phase 1: 50% Complete)
 - **Completed Tasks:** 3 / 23 Phases (Task 0.1, 0.2, 1.1 complete)
+- **Current Phase:** Phase 2 — Database Layer
+- **Current Task:** Task 2.1 — MongoDB connection
+- **Project Status:** 🟢 IN PROGRESS (Phase 0: 100% Complete ✅ | Phase 1: 100% Complete ✅ | Phase 2: 0% Complete)
+- **Completed Tasks:** 4 / 23 Phases (Task 0.1, 0.2, 1.1, 1.2 complete)
 
 ---
 
@@ -85,14 +89,14 @@ Next TODO: <next unchecked task>
   - [x] Build mock task board supporting all task states (Queued, Planning, Development, Testing, Awaiting Approval, Completed, Failed).
   - **Acceptance Criteria:** Dashboard runs locally (`pnpm --filter web dev`) and displays the complete task lifecycle UI using mock data. (PASSED ✅)
 
-- [ ] **Task 1.2 — Domain types**
-  - [ ] Create `packages/domain` package.
-  - [ ] Define TaskStatus enum and state definitions.
-  - [ ] Define Task, TaskRun, AgentStep, ToolCall, Artifact, TestRun, Approval, PullRequest types.
-  - [ ] Define state transition rules & validation matrix.
-  - [ ] Implement transition helper functions (reject illegal transitions).
-  - [ ] Add unit tests for transition rules.
-  - **Acceptance Criteria:** Every legal task transition is tested and verified; illegal transitions throw strict domain errors.
+- [x] **Task 1.2 — Domain types**
+  - [x] Create `packages/domain` package.
+  - [x] Define TaskStatus enum and state definitions.
+  - [x] Define Task, TaskRun, AgentStep, ToolCall, Artifact, TestRun, Approval, PullRequest types.
+  - [x] Define state transition rules & validation matrix.
+  - [x] Implement transition helper functions (reject illegal transitions).
+  - [x] Add unit tests for transition rules.
+  - **Acceptance Criteria:** Every legal task transition is tested and verified; illegal transitions throw strict domain errors. (PASSED ✅)
 
 ---
 
