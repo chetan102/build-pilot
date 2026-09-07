@@ -287,27 +287,27 @@ Next TODO: <next unchecked task>
 
 ## Phase 9 — GitHub App + Automatic Issue Intake
 
-- [ ] **Task 9.1 — GitHub App integration**
-  - [ ] Create `packages/github` package with Octokit / GitHub App client.
-  - [ ] Implement GitHub App authentication (private key, app ID, installation ID token generation).
-  - [ ] Support required permissions (Issues read/write, Pull Requests read/write, Contents read/write).
-  - **Acceptance Criteria:** Client can authenticate as a GitHub App installation and interact with GitHub API.
+- [x] **Task 9.1 — GitHub App integration**
+  - [x] Create `packages/github` package with Octokit / GitHub App client.
+  - [x] Implement GitHub App authentication (private key, app ID, installation ID token generation).
+  - [x] Support required permissions (Issues read/write, Pull Requests read/write, Contents read/write).
+  - **Acceptance Criteria:** Client can authenticate as a GitHub App installation and interact with GitHub API. (PASSED ✅)
 
-- [ ] **Task 9.2 — Webhook endpoint**
-  - [ ] Implement `POST /api/v1/github/webhooks` in `apps/api`.
-  - [ ] Verify GitHub webhook signature (`x-hub-signature-256`).
-  - [ ] Parse `issues`, `pull_request`, and `installation` event payloads.
-  - [ ] Persist raw webhook event to `events` collection.
-  - [ ] Implement idempotent event deduplication (`x-github-delivery`).
-  - **Acceptance Criteria:** Webhook endpoint validates signatures, deduplicates deliveries, and parses events.
+- [x] **Task 9.2 — Webhook endpoint**
+  - [x] Implement `POST /api/v1/github/webhooks` in `apps/api`.
+  - [x] Verify GitHub webhook signature (`x-hub-signature-256`).
+  - [x] Parse `issues`, `pull_request`, and `installation` event payloads.
+  - [x] Persist raw webhook event to `events` collection.
+  - [x] Implement idempotent event deduplication (`x-github-delivery`).
+  - **Acceptance Criteria:** Webhook endpoint validates signatures, deduplicates deliveries, and parses events. (PASSED ✅)
 
-- [ ] **Task 9.3 — Issue-to-task conversion**
-  - [ ] Implement eligibility filter (e.g. `buildpilot` label or configured trigger).
-  - [ ] Map GitHub issue fields → internal `Task` entity.
-  - [ ] Prevent duplicate task creation for the same issue.
-  - [ ] Enqueue task in BullMQ queue.
-  - [ ] Post initial acknowledgment comment on GitHub issue.
-  - **Acceptance Criteria:** Labeling or opening an eligible issue automatically creates and queues an internal task.
+- [x] **Task 9.3 — Issue-to-task conversion**
+  - [x] Implement eligibility filter (e.g. `buildpilot` label or configured trigger).
+  - [x] Map GitHub issue fields → internal `Task` entity.
+  - [x] Prevent duplicate task creation for the same issue.
+  - [x] Enqueue task in BullMQ queue.
+  - [x] Post initial acknowledgment comment on GitHub issue.
+  - **Acceptance Criteria:** Labeling or opening an eligible issue automatically creates and queues an internal task. (PASSED ✅)
 
 ---
 

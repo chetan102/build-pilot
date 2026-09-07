@@ -47,6 +47,9 @@ importers:
       '@buildpilot/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@buildpilot/github':
+        specifier: workspace:*
+        version: link:../../packages/github
       '@buildpilot/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -184,6 +187,9 @@ importers:
       ioredis:
         specifier: ^5.4.2
         version: 5.11.1
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: ^20.17.10
@@ -310,6 +316,9 @@ importers:
       '@types/node':
         specifier: ^20.17.10
         version: 20.19.43
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.13
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

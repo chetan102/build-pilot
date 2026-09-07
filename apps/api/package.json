@@ -16,6 +16,7 @@
     "@buildpilot/config": "workspace:*",
     "@buildpilot/database": "workspace:*",
     "@buildpilot/domain": "workspace:*",
+    "@buildpilot/github": "workspace:*",
     "@buildpilot/observability": "workspace:*",
     "@buildpilot/queue": "workspace:*",
     "@buildpilot/shared": "workspace:*",
@@ -36,4 +37,3 @@
     "vitest": "^2.1.8"
   }
 }
-

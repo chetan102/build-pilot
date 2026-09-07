@@ -1235,18 +1235,102 @@ pnpm --filter @buildpilot/github test
  Test Files  2 passed (2)
       Tests  4 passed (4)
 ```
-
 ##### Step 2: Run Full Monorepo Test Suite
 ```bash
 pnpm test
 ```
 Verify that all 21 test suites pass cleanly across all 12 monorepo packages.
 
+---
 
+## Phase 9 — GitHub App + Automatic Issue Intake
 
+### Tasks 9.1, 9.2, 9.3: Webhook Verification, Issue-to-Task Pipeline & GitHub Comments
 
+#### 📂 Key Files to Study:
+- [`packages/github/src/client/webhook-verifier.ts`](./packages/github/src/client/webhook-verifier.ts) — Timing-safe HMAC SHA-256 signature verifier (`verifyWebhookSignature`).
+- [`packages/github/src/client/github-client.ts`](./packages/github/src/client/github-client.ts) — Octokit REST client wrapper (`createIssueComment`, `createPullRequest`, `addLabels`).
+- [`apps/api/src/routes/webhooks.router.ts`](./apps/api/src/routes/webhooks.router.ts) — Webhook intake route (`POST /api/v1/github/webhooks`), deduplication, project resolution, and automatic task queuing.
+- [`apps/api/src/routes/webhooks.test.ts`](./apps/api/src/routes/webhooks.test.ts) — Integration test suite verifying webhook ingestion, eligibility filtering, and background task enqueuing.
 
+#### 🔄 Automatic Issue-to-Task Intake Flow:
+```mermaid
+sequenceDiagram
+    autonumber
+    participant GitHub as GitHub Webhook
+    participant API as Express API (/api/v1/github/webhooks)
+    participant Verifier as webhook-verifier.ts
+    participant DB as MongoDB (Projects / Tasks / Events)
+    participant Queue as BullMQ (engineering-task)
+    participant Client as GitHub Client
 
+    GitHub->>API: 1. POST /webhooks (x-hub-signature-256, x-github-event: issues)
+    API->>Verifier: 2. verifyWebhookSignature(rawBody, signature, secret)
+    Verifier-->>API: 3. Signature Valid (true)
+    API->>DB: 4. Insert Event (type: GITHUB_WEBHOOK_RECEIVED)
+    
+    alt Issue Labeled with 'buildpilot' or opened
+        API->>DB: 5. Find or Create Project for repo
+        API->>DB: 6. Create Task (status: QUEUED, source: GITHUB_ISSUE)
+        API->>Queue: 7. enqueueTask({ taskId, runId, branch, ... })
+        opt If GITHUB_TOKEN configured
+            API->>Client: 8. createIssueComment("🤖 BuildPilot picked up this task...")
+        end
+        API-->>GitHub: 9. 201 Created { action: "TASK_CREATED", taskId }
+    else Non-eligible issue / other event
+        API-->>GitHub: 9b. 200 OK { action: "ignored" }
+    end
+```
 
+#### 💡 Core Concepts & Why It's Built This Way:
+- **Zero Configuration Automated Intake**: Developers label any issue with `buildpilot` (or open a configured issue template). The control plane instantly provisions the project, enqueues the task, spawns the task branch, and posts a status comment acknowledging intake on GitHub.
+- **Timing-Safe Signature Verification**: Webhook payloads are verified using `crypto.timingSafeEqual`, preventing timing side-channel attacks when checking HMAC SHA-256 signatures.
+- **Delivery Idempotency**: Each webhook delivery contains a unique `x-github-delivery` header. Duplicate redeliveries from GitHub are acknowledged with `200 OK { deduplicated: true }` without enqueuing duplicate jobs.
 
+#### 🧪 How to Manually Run & Test:
 
+##### Step 1: Run Webhook & API Test Suite
+```bash
+pnpm --filter @buildpilot/api test
+```
+**Expected Output:**
+```text
+ ✓ src/routes/webhooks.test.ts (3 tests)
+ ✓ src/app.test.ts (9 tests)
+ ✓ src/routes/projects-tasks.test.ts (13 tests)
+ Test Files  3 passed (3)
+      Tests  25 passed (25)
+```
+
+##### Step 2: Trigger Webhook with Curl
+```bash
+curl -s -X POST http://localhost:4000/api/v1/github/webhooks \
+  -H "Content-Type: application/json" \
+  -H "x-github-event: issues" \
+  -H "x-github-delivery: del_demo_100" \
+  -d '{
+    "action": "labeled",
+    "label": { "name": "buildpilot" },
+    "issue": {
+      "number": 101,
+      "title": "Fix database connection timeout",
+      "body": "Increase timeout from 5s to 15s in connection manager",
+      "labels": [{ "name": "buildpilot" }]
+    },
+    "repository": {
+      "owner": { "login": "demo-org" },
+      "name": "service-backend",
+      "full_name": "demo-org/service-backend",
+      "default_branch": "main"
+    }
+  }' | jq .
+```
+**Expected Output:**
+```json
+{
+  "received": true,
+  "action": "TASK_CREATED",
+  "taskId": "<GENERATED_TASK_ID>",
+  "projectId": "<GENERATED_PROJECT_ID>"
+}
+```
