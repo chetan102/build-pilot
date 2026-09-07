@@ -29,6 +29,9 @@
 - [Phase 5 — LLM Provider Layer](#phase-5--llm-provider-layer)
   - [Task 5.1: Generic Provider Contract & Factory Architecture](#task-51-generic-provider-contract--factory-architecture)
   - [Task 5.2: OpenRouter Provider Adapter & Tool Calling](#task-52-openrouter-provider-adapter--tool-calling)
+  - [Task 5.3: OpenAI-Compatible Provider Adapter (Local Ollama, Groq, vLLM)](#task-53-openai-compatible-provider-adapter-local-ollama-groq-vllm)
+- [Phase 6 — Agent Runtime](#phase-6--agent-runtime)
+  - [Task 6.1: Context Builder & Token Budget Management](#task-61-context-builder--token-budget-management)
 
 ---
 
@@ -707,6 +710,148 @@ pnpm --filter @buildpilot/llm test:openrouter
 ```
 
 *(Optional: Set `export OPENROUTER_API_KEY=sk-or-v1-...` in your shell to execute live network calls against OpenRouter).*
+
+---
+
+### Task 5.3: OpenAI-Compatible Provider Adapter (Local Ollama, Groq, vLLM)
+
+#### 📂 Key Files to Study:
+- [`packages/llm/src/openai-compatible.ts`](./packages/llm/src/openai-compatible.ts) — OpenAI-compatible provider adapter supporting standard OpenAI, Ollama, Groq, vLLM, custom baseURLs, headers, and SSE streaming.
+- [`packages/llm/src/openai-compatible.test.ts`](./packages/llm/src/openai-compatible.test.ts) — Unit test suite verifying completions, tool calling, error normalization, and cross-provider DIP interchangeability.
+- [`packages/llm/src/scripts/test-openai-compatible.ts`](./packages/llm/src/scripts/test-openai-compatible.ts) — Standalone CLI demonstration script.
+
+#### 🔄 Multi-Provider Interchangeability Architecture:
+```mermaid
+flowchart TD
+    subgraph Agent_Layer["Agent Reasoning Layer (apps/worker)"]
+        AgentLoop["Agent Core Loop\n(Identical Code)"]
+    end
+
+    subgraph LLM_Interface["@buildpilot/llm Abstraction"]
+        Contract["interface LLMProvider\n(generate, stream, supports)"]
+        Factory["providerFactory.create(config)"]
+    end
+
+    subgraph Adapters["Provider Adapters"]
+        OpenRouter["OpenRouterProvider\n(https://openrouter.ai/api/v1)"]
+        OpenAI["OpenAICompatibleProvider\n(https://api.openai.com/v1)"]
+        Ollama["OpenAICompatibleProvider\n(http://localhost:11434/v1)"]
+        Groq["OpenAICompatibleProvider\n(https://api.groq.com/openai/v1)"]
+    end
+
+    AgentLoop -->|Calls generate()| Contract
+    Factory -->|Instantiates| OpenRouter
+    Factory -->|Instantiates| OpenAI
+    Factory -->|Instantiates| Ollama
+    Factory -->|Instantiates| Groq
+    OpenRouter -.->|Implements| Contract
+    OpenAI -.->|Implements| Contract
+    Ollama -.->|Implements| Contract
+    Groq -.->|Implements| Contract
+```
+
+#### 💡 Core Concepts & Why It's Built This Way:
+- **Universal OpenAI Wire Protocol**: Most local and cloud LLM inference engines (Ollama, vLLM, Groq, LM Studio, Together AI) adhere to the OpenAI `/chat/completions` REST format. A single robust adapter enables BuildPilot to run across both enterprise clouds and air-gapped local clusters.
+- **Zero Cloud API Cost / Private Mode**: By pointing `baseUrl` to `http://localhost:11434/v1` (Ollama) with open-weights models (such as `qwen2.5-coder:32b` or `deepseek-coder-v2`), engineering teams can run automated agent pipelines with 100% on-premise data privacy.
+- **Dependency Inversion in Action**: Agent reasoning algorithms and tool loops have zero vendor-specific imports. Changing from OpenRouter Claude 3.5 to local Ollama requires changing only the configuration file or UI dropdown, without touching a single line of agent code.
+
+#### 🧪 How to Manually Run & Test:
+
+##### Step 1: Run All LLM Unit Tests
+```bash
+pnpm --filter @buildpilot/llm test
+```
+**Expected Output:**
+```text
+ ✓ src/index.test.ts (19 tests)
+ ✓ src/openrouter.test.ts (13 tests)
+ ✓ src/openai-compatible.test.ts (12 tests)
+ Test Files  3 passed (3)
+      Tests  44 passed (44)
+```
+
+##### Step 2: Run the Standalone OpenAI-Compatible Demonstration Script
+```bash
+pnpm --filter @buildpilot/llm test:openai
+```
+**Expected Output (Without API Key - Safe Mock Demo):**
+```text
+🚀 Initializing OpenAICompatibleProvider with endpoint: https://api.openai.com/v1, model: gpt-4o
+📤 Sending prompt with tool definitions...
+❌ Request error: Failed to reach OpenAI-compatible provider at 'https://api.openai.com/v1': fetch failed PROVIDER_UNAVAILABLE_ERROR
+💡 Note: Set OPENAI_API_KEY or OPENAI_BASE_URL (e.g. for Ollama) in your environment to execute live network calls.
+```
+
+*(Optional: Set `export OPENAI_BASE_URL=http://localhost:11434/v1` and `export OPENAI_MODEL=qwen2.5-coder:32b` to test with a locally running Ollama instance).*
+
+---
+
+## Phase 6 — Agent Runtime
+
+### Task 6.1: Context Builder & Token Budget Management
+
+#### 📂 Key Files to Study:
+- [`apps/worker/src/agent/context-builder.ts`](./apps/worker/src/agent/context-builder.ts) — Main `ContextBuilder` assembling system prompts, task goals, repo context, and history within strict budgets.
+- [`apps/worker/src/agent/token-budget.ts`](./apps/worker/src/agent/token-budget.ts) — Token estimation algorithms, middle-out truncation, file tree formatting, and history message pruning.
+- [`apps/worker/src/agent/prompts.ts`](./apps/worker/src/agent/prompts.ts) — Base system prompt templates, task goals, and repository summary formatting.
+- [`apps/worker/src/agent/context-builder.test.ts`](./apps/worker/src/agent/context-builder.test.ts) — Unit test suite verifying token budgets, tool output truncation, and context window safety.
+
+#### 🔄 Context Assembly & Budgeting Flow:
+```mermaid
+flowchart TD
+    subgraph Inputs["Task & Repo Inputs"]
+        Task["TaskContext\n(Issue #, Title, Desc, Branch)"]
+        Repo["RepoContext\n(File Tree, Scripts, Guidelines)"]
+        History["Conversation History\n(User, Tool Calls, Tool Results)"]
+    end
+
+    subgraph Budget_Engine["ContextBuilder & Token Budget Engine"]
+        SysBuilder["System Prompt Builder\n(Base Rules + Task Goal + Repo Summary)"]
+        TreeTruncator["File Tree Truncator\n(Capped to maxFileTreeTokens)"]
+        ToolTruncator["Middle-Out Tool Output Truncator\n(Head + Tail preserved)"]
+        HistoryPruner["Sliding History Pruner\n(Pins initial prompt, prunes older steps)"]
+    end
+
+    subgraph Output["Output for LLM Provider"]
+        ReadyMessages["Structured Context\n{ systemPrompt, messages, estimatedTokens }\n(Guaranteed <= maxContextTokens)"]
+    end
+
+    Task --> SysBuilder
+    Repo --> TreeTruncator
+    TreeTruncator --> SysBuilder
+    History --> ToolTruncator
+    ToolTruncator --> HistoryPruner
+    SysBuilder --> ReadyMessages
+    HistoryPruner --> ReadyMessages
+```
+
+#### 💡 Core Concepts & Why It's Built This Way:
+- **Context Window is Finite & Costly**: Modern frontier models have varying context windows (e.g. 128k, 32k, 8k tokens). Without strict budgeting, reading large source files or executing verbose commands (like `pnpm test` with 5,000 lines of output) will blow past limits and crash with `400 ContextWindowExceededError`.
+- **Middle-Out Truncation Strategy**: When truncating oversized tool outputs, cutting the middle while keeping the head (declarations/inputs) and tail (error traces/summary results) preserves the most critical diagnostic information.
+- **Task Goal Pinning & History Pruning**: The original developer instruction (Issue description) is permanently pinned at index 0. If conversation steps grow long across 30+ turns, older intermediate thoughts are pruned while retaining recent reasoning steps.
+- **Fast Heuristic Token Estimation**: Estimates tokens accurately (~3.8 characters per token) without adding heavy WebAssembly tokenizer dependencies or slowing down the agent loop.
+
+#### 🧪 How to Manually Run & Test:
+
+##### Step 1: Run the Agent Runtime ContextBuilder Test Suite
+```bash
+pnpm --filter @buildpilot/worker test
+```
+**Expected Output:**
+```text
+ ✓ src/agent/context-builder.test.ts (12 tests)
+ ✓ src/worker.test.ts (7 tests)
+ Test Files  2 passed (2)
+      Tests  19 passed (19)
+```
+
+##### Step 2: Run Full Monorepo Test Suite
+```bash
+pnpm test
+```
+Verify that all 21 test suites pass with 100% clean verification across all 12 packages.
+
+
 
 
 

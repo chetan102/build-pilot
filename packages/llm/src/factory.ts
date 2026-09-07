@@ -4,6 +4,7 @@ import { ProviderConfig, ProviderConfigSchema } from './types.js';
 import { InvalidRequestError } from './errors.js';
 import { MockLLMProvider } from './base-provider.js';
 import { OpenRouterProvider } from './openrouter.js';
+import { OpenAICompatibleProvider } from './openai-compatible.js';
 
 export type ProviderConstructor = new (id: string, config: ProviderConfig) => LLMProvider;
 export type ProviderFactoryFn = (config: ProviderConfig) => LLMProvider;
@@ -24,6 +25,58 @@ export class ProviderFactory {
     this.register(LLMProviderType.OPENROUTER, (config) => {
       const id = `openrouter:${config.defaultModel || 'default'}`;
       return new OpenRouterProvider(id, config);
+    });
+
+    // Default registration for OpenAI Standard Provider
+    this.register(LLMProviderType.OPENAI, (config) => {
+      const id = `openai:${config.defaultModel || 'default'}`;
+      return new OpenAICompatibleProvider(id, {
+        ...config,
+        baseUrl: config.baseUrl || 'https://api.openai.com/v1',
+      });
+    });
+
+    // Default registration for Custom OpenAI-Compatible Provider
+    this.register(LLMProviderType.CUSTOM_OPENAI_COMPATIBLE, (config) => {
+      const id = `custom:${config.defaultModel || 'default'}`;
+      return new OpenAICompatibleProvider(id, config);
+    });
+
+    // Convenience aliases
+    this.register('GROQ', (config) => {
+      const id = `groq:${config.defaultModel || 'default'}`;
+      return new OpenAICompatibleProvider(id, {
+        ...config,
+        providerType: 'GROQ',
+        baseUrl: config.baseUrl || 'https://api.groq.com/openai/v1',
+      });
+    });
+
+    this.register('OLLAMA', (config) => {
+      const id = `ollama:${config.defaultModel || 'default'}`;
+      return new OpenAICompatibleProvider(id, {
+        ...config,
+        providerType: 'OLLAMA',
+        baseUrl: config.baseUrl || 'http://localhost:11434/v1',
+      });
+    });
+
+    this.register('VLLM', (config) => {
+      const id = `vllm:${config.defaultModel || 'default'}`;
+      return new OpenAICompatibleProvider(id, {
+        ...config,
+        providerType: 'VLLM',
+        baseUrl: config.baseUrl || 'http://localhost:8000/v1',
+      });
+    });
+
+    this.register('TOGETHER', (config) => {
+      const id = `together:${config.defaultModel || 'default'}`;
+      return new OpenAICompatibleProvider(id, {
+        ...config,
+        providerType: 'TOGETHER',
+        baseUrl: config.baseUrl || 'https://api.together.xyz/v1',
+      });
     });
   }
 

@@ -197,22 +197,22 @@ Next TODO: <next unchecked task>
   - [x] Write unit & integration test with mock and real/test endpoints.
   - **Acceptance Criteria:** A standalone test script can send a prompt with tool definitions to a fixed OpenRouter model and receive a normalized tool call. (PASSED ✅)
 
-- [ ] **Task 5.3 — OpenAI-compatible provider adapter**
-  - [ ] Implement `OpenAICompatibleProvider` adapter supporting custom `baseURL` and API keys.
-  - [ ] Support standard OpenAI endpoints, Ollama, Groq, vLLM, etc.
-  - [ ] Verify identical interface behavior across providers.
-  - **Acceptance Criteria:** The same agent code can call two different API endpoints without modifying the agent loop.
+- [x] **Task 5.3 — OpenAI-compatible provider adapter**
+  - [x] Implement `OpenAICompatibleProvider` adapter supporting custom `baseURL` and API keys.
+  - [x] Support standard OpenAI endpoints, Ollama, Groq, vLLM, etc.
+  - [x] Verify identical interface behavior across providers.
+  - **Acceptance Criteria:** The same agent code can call two different API endpoints without modifying the agent loop. (PASSED ✅)
 
 ---
 
 ## Phase 6 — Agent Runtime
 
-- [ ] **Task 6.1 — Context builder**
-  - [ ] Build task instruction and requirements context.
-  - [ ] Build repository metadata, file tree summary, and branch context.
-  - [ ] Format conversation and tool call execution history.
-  - [ ] Enforce context window token budgets and truncation policies.
-  - **Acceptance Criteria:** Context builder produces structured prompts within token limits.
+- [x] **Task 6.1 — Context builder**
+  - [x] Build task instruction and requirements context.
+  - [x] Build repository metadata, file tree summary, and branch context.
+  - [x] Format conversation and tool call execution history.
+  - [x] Enforce context window token budgets and truncation policies.
+  - **Acceptance Criteria:** Context builder produces structured prompts within token limits. (PASSED ✅)
 
 - [ ] **Task 6.2 — Agent core loop**
   - [ ] Implement deterministic system prompt for engineering agents.
