@@ -436,13 +436,13 @@ Next TODO: <next unchecked task>
   - [x] Queue payload validation tests.
   - **Acceptance Criteria:** `pnpm test` runs all unit tests with 100% pass rate. (PASSED ✅)
 
-- [ ] **Task 15.2 — Integration tests**
-  - [ ] Express API ↔ MongoDB integration tests.
-  - [ ] Express API ↔ BullMQ / Redis integration tests.
-  - [ ] Worker ↔ Redis job processing integration tests.
-  - [ ] Worker ↔ Mock LLM provider end-to-end tests.
-  - [ ] Worker ↔ Git worktree integration tests.
-  - **Acceptance Criteria:** Integration test suite passes against local containerized test DB and Redis.
+- [x] **Task 15.2 — Integration tests**
+  - [x] Express API ↔ MongoDB integration tests.
+  - [x] Express API ↔ BullMQ / Redis integration tests.
+  - [x] Worker ↔ Redis job processing integration tests.
+  - [x] Worker ↔ Mock LLM provider end-to-end tests.
+  - [x] Worker ↔ Git worktree integration tests.
+  - **Acceptance Criteria:** Integration test suite passes against local containerized test DB and Redis. (PASSED ✅)
 
 - [ ] **Task 15.3 — End-to-end automated tests**
   - [ ] Simulate GitHub webhook → Task → Agent run → PR output.
