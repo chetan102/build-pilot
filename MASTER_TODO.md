@@ -481,10 +481,10 @@ Next TODO: <next unchecked task>
   - [x] Normalize errors and token usage.
   - **Acceptance Criteria:** Agent runtime executes tasks using Gemini model. (PASSED ✅)
 
-- [ ] **Task 17.2 — OpenAI provider adapter**
-  - [ ] Implement direct `OpenAIProvider` adapter.
-  - [ ] Support GPT-4o / standard models with native tool calling.
-  - **Acceptance Criteria:** Agent runtime executes tasks using OpenAI provider.
+- [x] **Task 17.2 — OpenAI provider adapter**
+  - [x] Implement direct `OpenAIProvider` adapter.
+  - [x] Support GPT-4o / standard models with native tool calling.
+  - **Acceptance Criteria:** Agent runtime executes tasks using OpenAI provider. (PASSED ✅)
 
 - [ ] **Task 17.3 — Anthropic provider adapter**
   - [ ] Implement `AnthropicProvider` adapter.
