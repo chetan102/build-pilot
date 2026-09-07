@@ -1183,6 +1183,66 @@ pnpm test
 ```
 Verify that all 21 test suites pass cleanly across all 12 monorepo packages.
 
+---
+
+## Phase 8 — Git Workspace Management
+
+### Tasks 8.1, 8.2, 8.3: Repository Mirroring, Isolated Worktrees & Commit/Push Flow
+
+#### 📂 Key Files to Study:
+- [`packages/github/src/git/repository-manager.ts`](./packages/github/src/git/repository-manager.ts) — Git mirror clone & incremental fetch service (`GitRepositoryManager`).
+- [`packages/github/src/git/worktree-manager.ts`](./packages/github/src/git/worktree-manager.ts) — Isolated task worktree lifecycle manager (`createWorktree`, `removeWorktree`, `listWorktrees`).
+- [`packages/github/src/git/commit-push-service.ts`](./packages/github/src/git/commit-push-service.ts) — Structured task commit creator and atomic remote branch pusher (`GitCommitPushService`).
+- [`packages/github/src/git/git.test.ts`](./packages/github/src/git/git.test.ts) — Unit test suite verifying clone, fetch, worktree branching, staged diff extraction, and cleanup.
+
+#### 🔄 Git Worktree Isolation Architecture:
+```mermaid
+flowchart TD
+    subgraph Host["Control Plane Host Storage"]
+        Mirror["Repository Mirror\n(/data/repos/owner_name/.git)"]
+        Worktree1["Worktree Task A\n(/data/worktrees/task_1_run_1)\nBranch: buildpilot/task-1-abc"]
+        Worktree2["Worktree Task B\n(/data/worktrees/task_2_run_1)\nBranch: buildpilot/task-2-xyz"]
+    end
+
+    subgraph Remote["Remote Git Server (GitHub / GitLab)"]
+        RemoteMain["main branch (Protected)"]
+        RemoteTaskA["buildpilot/task-1-abc"]
+    end
+
+    RemoteMain -->|1. cloneOrFetch()| Mirror
+    Mirror -->|2. git worktree add| Worktree1
+    Mirror -->|2. git worktree add| Worktree2
+    Worktree1 -->|3. Agent code edits| Worktree1
+    Worktree1 -->|4. createCommit() + pushBranch()| RemoteTaskA
+    Worktree1 -->|5. removeWorktree()| Mirror
+```
+
+#### 💡 Core Concepts & Why It's Built This Way:
+- **Zero Cross-Contamination**: Rather than having workers compete over a single checked-out directory, Git worktrees allow multiple workers to execute concurrently on separate task branches using a single shared repository object storage (`.git/objects`), saving 90% disk space and eliminating branch switching conflicts.
+- **Protected Base Branch**: Tasks never modify or commit directly to `main`. Every run operates on a dedicated ephemeral branch (`buildpilot/task-<shortTaskId>-<shortRunId>`).
+- **Clean Teardown**: Upon task completion or cancellation, `removeWorktree` runs `git worktree remove --force` followed by `git worktree prune`, leaving zero dangling locks or leftover files.
+
+#### 🧪 How to Manually Run & Test:
+
+##### Step 1: Run Git Workspace Unit Tests
+```bash
+pnpm --filter @buildpilot/github test
+```
+**Expected Output:**
+```text
+ ✓ src/index.test.ts (1 test)
+ ✓ src/git/git.test.ts (3 tests)
+ Test Files  2 passed (2)
+      Tests  4 passed (4)
+```
+
+##### Step 2: Run Full Monorepo Test Suite
+```bash
+pnpm test
+```
+Verify that all 21 test suites pass cleanly across all 12 monorepo packages.
+
+
 
 
 

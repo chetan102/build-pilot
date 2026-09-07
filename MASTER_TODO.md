@@ -264,24 +264,24 @@ Next TODO: <next unchecked task>
 
 ## Phase 8 — Git Workspace Management
 
-- [ ] **Task 8.1 — Repository preparation**
-  - [ ] Implement Git clone / fetch service into controlled workspace directory.
-  - [ ] Validate repository remote URL and verify default branch ref.
-  - [ ] Fetch latest target branch refs.
-  - **Acceptance Criteria:** Worker can clone and maintain a clean mirror of a target repository.
+- [x] **Task 8.1 — Repository preparation**
+  - [x] Implement Git clone / fetch service into controlled workspace directory.
+  - [x] Validate repository remote URL and verify default branch ref.
+  - [x] Fetch latest target branch refs.
+  - **Acceptance Criteria:** Worker can clone and maintain a clean mirror of a target repository. (PASSED ✅)
 
-- [ ] **Task 8.2 — Isolated worktree management**
-  - [ ] Create dedicated branch per task (`buildpilot/task-<taskId>-<shortId>`).
-  - [ ] Create dedicated Git worktree per task run.
-  - [ ] Track active worktree paths in task metadata.
-  - [ ] Implement worktree cleanup upon task completion, cancellation, or crash.
-  - **Acceptance Criteria:** Multiple task runs operate in completely isolated worktrees without cross-contamination.
+- [x] **Task 8.2 — Isolated worktree management**
+  - [x] Create dedicated branch per task (`buildpilot/task-<taskId>-<shortId>`).
+  - [x] Create dedicated Git worktree per task run.
+  - [x] Track active worktree paths in task metadata.
+  - [x] Implement worktree cleanup upon task completion, cancellation, or crash.
+  - **Acceptance Criteria:** Multiple task runs operate in completely isolated worktrees without cross-contamination. (PASSED ✅)
 
-- [ ] **Task 8.3 — Commit & push flow**
-  - [ ] Inspect diff before committing to ensure only expected changes exist.
-  - [ ] Create structured commit with task metadata and issue reference.
-  - [ ] Capture commit SHA and push task branch to remote.
-  - **Acceptance Criteria:** Worker can branch, commit verified changes, and push to remote without touching `main`.
+- [x] **Task 8.3 — Commit & push flow**
+  - [x] Inspect diff before committing to ensure only expected changes exist.
+  - [x] Create structured commit with task metadata and issue reference.
+  - [x] Capture commit SHA and push task branch to remote.
+  - **Acceptance Criteria:** Worker can branch, commit verified changes, and push to remote without touching `main`. (PASSED ✅)
 
 ---
 

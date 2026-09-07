@@ -1,3 +1,5 @@
+export * from './git/index.js';
+
 export interface GitHubIssuePayload {
   number: number;
   title: string;
@@ -19,4 +21,3 @@ export function isIssueEligible(
     false
   );
 }
-
