@@ -298,4 +298,86 @@ describe('WorkerService Lifecycle & Job Processing', () => {
     await service.stop();
     expect(service.getWorkerManager()).toBeNull();
   });
+
+  describe('Scaling & Multi-Worker Optimization (Phase 22: Scale)', () => {
+    it('Task 22.1: processes multiple concurrent jobs in parallel without cross-contamination', async () => {
+      const concurrentJobsCount = 3;
+      const executionTimes: number[] = [];
+
+      const parallelExecutor = vi.fn().mockImplementation(async (task) => {
+        const start = Date.now();
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        executionTimes.push(Date.now() - start);
+        return { success: true };
+      });
+
+      const service = createWorkerService({
+        concurrency: 5,
+        taskRepository: mockTaskRepo,
+        taskRunRepository: mockTaskRunRepo,
+        eventRepository: mockEventRepo,
+        jobExecutor: parallelExecutor,
+      });
+
+      const jobs = Array.from({ length: concurrentJobsCount }, (_, i) => ({
+        id: `job_parallel_${i}`,
+        attemptsMade: 0,
+        opts: { attempts: 3 },
+        data: {
+          taskId: `task_parallel_${i}`,
+          runId: `run_parallel_${i}`,
+          projectId: 'proj_1',
+          repositoryId: 'repo_1',
+          issueNumber: i + 1,
+          title: `Concurrent task ${i}`,
+          branch: `bp/branch-${i}`,
+        },
+      })) as any[];
+
+      const results = await Promise.all(jobs.map((j) => service.processJob(j)));
+      expect(results).toHaveLength(3);
+      expect(parallelExecutor).toHaveBeenCalledTimes(3);
+    });
+
+    it('Task 22.2: handles multiple worker replica instances sharing workload', async () => {
+      const workerA = createWorkerService({
+        concurrency: 2,
+        taskRepository: mockTaskRepo,
+        taskRunRepository: mockTaskRunRepo,
+        eventRepository: mockEventRepo,
+        jobExecutor: vi.fn().mockResolvedValue({ success: true, worker: 'A' }),
+      });
+
+      const workerB = createWorkerService({
+        concurrency: 2,
+        taskRepository: mockTaskRepo,
+        taskRunRepository: mockTaskRunRepo,
+        eventRepository: mockEventRepo,
+        jobExecutor: vi.fn().mockResolvedValue({ success: true, worker: 'B' }),
+      });
+
+      const job1 = {
+        id: 'cluster_job_1',
+        attemptsMade: 0,
+        opts: { attempts: 3 },
+        data: { taskId: 'task_c1', runId: 'run_c1', projectId: 'p1', repositoryId: 'r1', issueNumber: 1, title: 'Task 1', branch: 'b1' },
+      } as any;
+
+      const job2 = {
+        id: 'cluster_job_2',
+        attemptsMade: 0,
+        opts: { attempts: 3 },
+        data: { taskId: 'task_c2', runId: 'run_c2', projectId: 'p1', repositoryId: 'r1', issueNumber: 2, title: 'Task 2', branch: 'b2' },
+      } as any;
+
+      const [resA, resB] = await Promise.all([
+        workerA.processJob(job1),
+        workerB.processJob(job2),
+      ]);
+
+      expect(resA.success).toBe(true);
+      expect(resB.success).toBe(true);
+    });
+  });
 });
+

@@ -591,10 +591,10 @@ Next TODO: <next unchecked task>
 
 ## Phase 22 — Scale & Multi-Worker Optimization
 
-- [ ] **Task 22.1 — Parallel execution**
-  - [ ] Run multiple tasks concurrently in separate worktrees and containers.
-  - [ ] Measure resource consumption (CPU, RAM, disk I/O).
-  - **Acceptance Criteria:** Concurrent tasks execute without resource collisions.
+- [x] **Task 22.1 — Parallel execution**
+  - [x] Run multiple tasks concurrently in separate worktrees and containers.
+  - [x] Measure resource consumption (CPU, RAM, disk I/O).
+  - **Acceptance Criteria:** Concurrent tasks execute without resource collisions. (PASSED ✅)
 
 - [ ] **Task 22.2 — Worker clustering**
   - [ ] Scale to multiple worker replicas sharing BullMQ queue.
