@@ -214,17 +214,17 @@ Next TODO: <next unchecked task>
   - [x] Enforce context window token budgets and truncation policies.
   - **Acceptance Criteria:** Context builder produces structured prompts within token limits. (PASSED ✅)
 
-- [ ] **Task 6.2 — Agent core loop**
-  - [ ] Implement deterministic system prompt for engineering agents.
-  - [ ] Send structured context + available tools to LLM.
-  - [ ] Detect and parse tool calls vs final answer messages.
-  - [ ] Validate tool arguments using Zod schemas.
-  - [ ] Authorize tool execution via permission policy.
-  - [ ] Execute tool, capture output, and append tool results to message history.
-  - [ ] Persist every `AgentStep` and `ToolCall` to database in real-time.
-  - [ ] Enforce safety guards: max steps, max wall-clock runtime, per-tool timeout.
-  - [ ] Support cancellation signals during agent execution.
-  - **Acceptance Criteria:** Scripted agent executes a multi-step tool-calling task with full history recorded in `agent_steps` and `tool_calls`.
+- [x] **Task 6.2 — Agent core loop**
+  - [x] Implement deterministic system prompt for engineering agents.
+  - [x] Send structured context + available tools to LLM.
+  - [x] Detect and parse tool calls vs final answer messages.
+  - [x] Validate tool arguments using Zod schemas.
+  - [x] Authorize tool execution via permission policy.
+  - [x] Execute tool, capture output, and append tool results to message history.
+  - [x] Persist every `AgentStep` and `ToolCall` to database in real-time.
+  - [x] Enforce safety guards: max steps, max wall-clock runtime, per-tool timeout.
+  - [x] Support cancellation signals during agent execution.
+  - **Acceptance Criteria:** Scripted agent executes a multi-step tool-calling task with full history recorded in `agent_steps` and `tool_calls`. (PASSED ✅)
 
 - [ ] **Task 6.3 — Agent failure recovery**
   - [ ] Implement retry logic for transient LLM errors (exponential backoff).

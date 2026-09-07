@@ -849,7 +849,90 @@ pnpm --filter @buildpilot/worker test
 ```bash
 pnpm test
 ```
-Verify that all 21 test suites pass with 100% clean verification across all 12 packages.
+Verify that all test suites pass with 100% clean verification across all 12 packages.
+
+---
+
+### Task 6.2: Agent Core Loop with Multi-Step Tool Execution & Persistence
+
+#### 📂 Key Files to Study:
+- [`apps/worker/src/agent/agent-loop.ts`](./apps/worker/src/agent/agent-loop.ts) — Autonomous ReAct agent loop execution engine with Zod schema validation, safety timeouts, cancellation token handling, and live MongoDB persistence.
+- [`apps/worker/src/agent/agent-loop.test.ts`](./apps/worker/src/agent/agent-loop.test.ts) — Unit test suite verifying multi-step tool calls, schema rejection, error recovery, step limit enforcement, and DB audit logging.
+- [`packages/database/src/repositories/agent-step.repository.ts`](./packages/database/src/repositories/agent-step.repository.ts) — Real-time persistence repository for LLM thoughts, prompts, tool calls, and completion tokens.
+- [`packages/database/src/repositories/tool-call.repository.ts`](./packages/database/src/repositories/tool-call.repository.ts) — Real-time persistence repository for tool execution inputs, outputs, error traces, and latency.
+
+#### 🔄 Multi-Step Agent Execution Flow:
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Worker as WorkerService (apps/worker)
+    participant Loop as AgentCoreLoop
+    participant Ctx as ContextBuilder
+    participant LLM as LLMProvider (OpenRouter/OpenAI)
+    participant Registry as ToolRegistry (@buildpilot/tools)
+    participant DB as MongoDB (agent_steps & tool_calls)
+
+    Worker->>Loop: 1. execute({ task, repo, provider, tools })
+    Loop->>Ctx: 2. build({ task, repo, history })
+    Ctx-->>Loop: 3. Formatted prompt within token budget
+    
+    loop While step <= maxSteps && not completed
+        Loop->>LLM: 4. generate({ systemPrompt, messages, tools })
+        LLM-->>Loop: 5. LLMResponse (thought text + tool_calls)
+        Loop->>DB: 6. Persist AgentStep (type: MODEL_REASONING, status: RUNNING)
+        
+        alt Has Tool Calls
+            loop For each ToolCall
+                Loop->>Registry: 7. Validate tool arguments with Zod
+                alt Arguments Valid & Tool Found
+                    Loop->>Registry: 8. Execute tool with per-tool timeout
+                    Registry-->>Loop: 9. Tool execution output
+                    Loop->>DB: 10. Persist ToolCall record (status: SUCCESS)
+                else Validation Error / Unknown Tool
+                    Loop->>DB: 10b. Persist ToolCall record (status: FAILED)
+                    Note over Loop: 11. Feed error back as tool result for self-correction
+                end
+            end
+            Loop->>Loop: 12. Append tool results to message history
+            Loop->>DB: 13. Mark AgentStep as COMPLETED
+        else No Tool Calls (Final Answer Reached)
+            Loop->>DB: 14. Mark AgentStep as COMPLETED
+            Loop-->>Worker: 15. Return { success: true, finalAnswer, stepsCount }
+        end
+    end
+```
+
+#### 💡 Core Concepts & Why It's Built This Way:
+- **Autonomous Tool-Calling Loop**: The core loop follows the ReAct (Reasoning + Action) pattern. The LLM reasons about the task, decides which tools to invoke (e.g. `read_file`, `search_code`), inspects their outputs, and repeats until it synthesizes the final solution.
+- **Strict Zod Argument Validation**: LLMs occasionally hallucinate parameter types or omit required fields. Before invoking any system tool, arguments are parsed and validated through runtime Zod schemas. If invalid, the error message is fed back directly to the LLM so it can immediately correct its call.
+- **Granular Real-Time DB Persistence**: Every reasoning step (`agent_steps`) and every individual tool execution (`tool_calls`) is saved to MongoDB asynchronously as it happens. This powers live timeline updates on the web dashboard (via SSE) and provides post-mortem auditability.
+- **Comprehensive Safety Guards**:
+  - `maxSteps`: Caps total LLM roundtrips (default 30) to prevent infinite billing loops.
+  - `maxWallClockMs`: Enforces overall timeout per task run.
+  - `toolTimeoutMs`: Enforces per-tool execution limit (e.g. preventing a hanging command from stalling the worker).
+  - `cancellationToken`: Allows immediate user-initiated cancellation from the dashboard.
+
+#### 🧪 How to Manually Run & Test:
+
+##### Step 1: Run the Agent Core Loop Unit Tests
+```bash
+pnpm --filter @buildpilot/worker test
+```
+**Expected Output:**
+```text
+ ✓ src/agent/agent-loop.test.ts (6 tests)
+ ✓ src/agent/context-builder.test.ts (12 tests)
+ ✓ src/worker.test.ts (7 tests)
+ Test Files  3 passed (3)
+      Tests  25 passed (25)
+```
+
+##### Step 2: Run Full Monorepo Test Suite
+```bash
+pnpm test
+```
+Verify that all 21 test suites pass across all 12 monorepo packages.
+
 
 
 
