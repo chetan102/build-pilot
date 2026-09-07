@@ -40,6 +40,8 @@ describe('End-to-End Vertical Slice (Phase 10: Issue → Code Fix → Tests → 
       markStarted: vi.fn().mockResolvedValue({ status: TaskRunStatus.RUNNING }),
       markCompleted: vi.fn().mockResolvedValue({ status: TaskRunStatus.COMPLETED }),
       markFailed: vi.fn().mockResolvedValue({ status: TaskRunStatus.FAILED }),
+      saveCheckpoint: vi.fn().mockResolvedValue({ _id: 'run_1' }),
+      renewHeartbeat: vi.fn().mockResolvedValue({ _id: 'run_1' }),
     };
 
     mockEventRepo = {

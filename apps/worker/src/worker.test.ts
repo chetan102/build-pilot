@@ -21,6 +21,8 @@ describe('WorkerService Lifecycle & Job Processing', () => {
       markStarted: vi.fn().mockResolvedValue({ status: TaskRunStatus.RUNNING }),
       markCompleted: vi.fn().mockResolvedValue({ status: TaskRunStatus.COMPLETED }),
       markFailed: vi.fn().mockResolvedValue({ status: TaskRunStatus.FAILED }),
+      saveCheckpoint: vi.fn().mockResolvedValue({ _id: '6a9cf2425d9b845db6781a19' }),
+      renewHeartbeat: vi.fn().mockResolvedValue({ _id: '6a9cf2425d9b845db6781a19' }),
     };
 
     mockEventRepo = {

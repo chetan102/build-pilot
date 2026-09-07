@@ -19,6 +19,7 @@ import { TaskStatus, TaskRunStatus, LLMProviderType } from '@buildpilot/domain';
 import { LLMProvider, providerFactory, MockLLMProvider } from '@buildpilot/llm';
 import { toolRegistry as defaultToolRegistry, ToolRegistry } from '@buildpilot/tools';
 import { agentCoreLoop, AgentCoreLoop } from './agent/index.js';
+import { TaskHeartbeatSession } from './durability/heartbeat-manager.js';
 import { Job } from 'bullmq';
 
 const config = loadConfig();
@@ -112,8 +113,17 @@ export class WorkerService {
       'Worker picked up engineering task job',
     );
 
+    const heartbeat = new TaskHeartbeatSession({
+      runId,
+      taskRunRepo: this.taskRunRepo,
+      logger: this.logger,
+    });
+
     try {
-      // 1. Initialize / persist TaskRun state
+      // 1. Start heartbeat lease renewal session
+      await heartbeat.start();
+
+      // 2. Initialize / persist TaskRun state
       const existingRun = await this.taskRunRepo.findById(runId);
       if (!existingRun) {
         await this.taskRunRepo.create({
@@ -130,12 +140,18 @@ export class WorkerService {
         await this.taskRunRepo.markStarted(runId, new Date());
       }
 
-      // 2. Transition Task status to PLANNING (active execution phase)
+      // 3. Save initial checkpoint & transition Task status to PLANNING
+      await this.taskRunRepo.saveCheckpoint(runId, {
+        stage: 'PLANNING',
+        stepIndex: 1,
+        summary: `Started processing on branch ${branch}`,
+      });
+
       await this.taskRepo.updateStatus(taskId, TaskStatus.PLANNING, {
         activeRunId: runId,
       });
 
-      // 3. Record TASK_RUN_STARTED event
+      // 4. Record TASK_RUN_STARTED event
       await this.eventRepo.create({
         taskId,
         runId,
@@ -151,7 +167,7 @@ export class WorkerService {
         level: 'info',
       });
 
-      // 4. Execute the agent workflow (custom executor or full autonomous agent pipeline)
+      // 5. Execute the agent workflow (custom executor or full autonomous agent pipeline)
       let executionOutput: Record<string, unknown> | undefined;
       if (this.jobExecutor) {
         const res = await this.jobExecutor(job.data, job);
@@ -208,15 +224,21 @@ export class WorkerService {
 
       const durationMs = Date.now() - startTime;
 
-      // 5. Mark TaskRun as COMPLETED
+      // 6. Save completion checkpoint & mark TaskRun as COMPLETED
+      await this.taskRunRepo.saveCheckpoint(runId, {
+        stage: 'COMPLETED',
+        stepIndex: (executionOutput?.totalSteps as number) || 1,
+        summary: 'Agent loop successfully completed execution',
+      });
+
       await this.taskRunRepo.markCompleted(runId, durationMs);
 
-      // 6. Transition Task to COMPLETED (or next stage)
+      // 7. Transition Task to COMPLETED (or next stage)
       await this.taskRepo.updateStatus(taskId, TaskStatus.COMPLETED, {
         completedRunId: runId,
       });
 
-      // 7. Record TASK_RUN_COMPLETED event
+      // 8. Record TASK_RUN_COMPLETED event
       await this.eventRepo.create({
         taskId,
         runId,
@@ -273,6 +295,8 @@ export class WorkerService {
       }
 
       throw err;
+    } finally {
+      heartbeat.stop();
     }
   }
 

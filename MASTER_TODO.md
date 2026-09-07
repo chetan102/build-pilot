@@ -354,11 +354,11 @@ Next TODO: <next unchecked task>
 
 ## Phase 12 — Reliability & Durable Workflow
 
-- [ ] **Task 12.1 — Persistent state machine & transactional transitions**
-  - [ ] Ensure every state change is persisted atomically with transition audit log.
-  - [ ] Persist current stage, attempt number, and last successful checkpoint.
-  - [ ] Implement worker heartbeat and lease renewal to detect stalled workers.
-  - **Acceptance Criteria:** Task state is always consistent and auditable across restarts.
+- [x] **Task 12.1 — Persistent state machine & transactional transitions**
+  - [x] Ensure every state change is persisted atomically with transition audit log.
+  - [x] Persist current stage, attempt number, and last successful checkpoint.
+  - [x] Implement worker heartbeat and lease renewal to detect stalled workers.
+  - **Acceptance Criteria:** Task state is always consistent and auditable across restarts. (PASSED ✅)
 
 - [ ] **Task 12.2 — Crash recovery & resume**
   - [ ] Handle worker crashes during planning, execution, and testing.

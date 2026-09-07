@@ -6,6 +6,20 @@ import {
   LLMProviderKind,
 } from '@buildpilot/domain';
 
+export interface ITaskRunCheckpoint {
+  stage: string;
+  stepIndex: number;
+  filesModified?: string[];
+  lastSavedAt: Date;
+  summary?: string;
+}
+
+export interface ITaskRunHeartbeat {
+  workerId: string;
+  lastHeartbeatAt: Date;
+  leaseExpiresAt: Date;
+}
+
 export interface ITaskRun {
   _id?: string;
   taskId: string;
@@ -19,6 +33,8 @@ export interface ITaskRun {
   completedAt?: Date;
   durationMs?: number;
   errorMessage?: string;
+  checkpoint?: ITaskRunCheckpoint;
+  heartbeat?: ITaskRunHeartbeat;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -41,6 +57,18 @@ export const TaskRunSchema = new Schema<ITaskRun>(
     completedAt: { type: Date },
     durationMs: { type: Number },
     errorMessage: { type: String },
+    checkpoint: {
+      stage: { type: String },
+      stepIndex: { type: Number },
+      filesModified: { type: [String], default: [] },
+      lastSavedAt: { type: Date },
+      summary: { type: String },
+    },
+    heartbeat: {
+      workerId: { type: String },
+      lastHeartbeatAt: { type: Date },
+      leaseExpiresAt: { type: Date, index: true },
+    },
   },
   { timestamps: true },
 );
