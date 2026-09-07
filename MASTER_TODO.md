@@ -466,10 +466,10 @@ Next TODO: <next unchecked task>
   - [x] Resume or terminate task upon human decision.
   - **Acceptance Criteria:** High-risk actions pause execution until human approves in the dashboard. (PASSED ✅)
 
-- [ ] **Task 16.2 — Granular permissions & audit**
-  - [ ] Configurable global and repository-level tool permission policies.
-  - [ ] Audit log for every executed, denied, or approved action.
-  - **Acceptance Criteria:** Unauthorized tool calls are blocked and audited.
+- [x] **Task 16.2 — Granular permissions & audit**
+  - [x] Configurable global and repository-level tool permission policies.
+  - [x] Audit log for every executed, denied, or approved action.
+  - **Acceptance Criteria:** Unauthorized tool calls are blocked and audited. (PASSED ✅)
 
 ---
 
