@@ -994,7 +994,85 @@ pnpm --filter @buildpilot/worker test
 ```bash
 pnpm test
 ```
+Verify that all test suites pass cleanly across all 12 monorepo packages.
+
+---
+
+## Phase 7 — First Tool Registry
+
+### Task 7.1: Typed Tool Framework & Permission Policies
+
+#### 📂 Key Files to Study:
+- [`packages/tools/src/types.ts`](./packages/tools/src/types.ts) — Typed `ToolDefinition<TInput, TOutput>`, `ToolContext`, `ToolExecutionResult`, and permission classes (`READ_ONLY`, `SAFE_WRITE`, `EXTERNAL_WRITE`, `HIGH_RISK`).
+- [`packages/tools/src/registry.ts`](./packages/tools/src/registry.ts) — Central `ToolRegistry` with Zod schema validation, execution timeouts, permission policy enforcement, and LLM JSON schema formatting.
+- [`packages/tools/src/errors.ts`](./packages/tools/src/errors.ts) — Structured tool error hierarchy (`UnknownToolError`, `ToolValidationError`, `ToolPermissionError`, `ToolTimeoutError`).
+- [`packages/tools/src/registry.test.ts`](./packages/tools/src/registry.test.ts) — Unit test suite verifying schema validation, permission class blocking, timeouts, and LLM tool formatting.
+
+#### 🔄 Tool Registry & Permission Architecture:
+```mermaid
+flowchart TD
+    subgraph Agent["Agent Core Loop"]
+        Call["Tool Call: name + rawArguments"]
+    end
+
+    subgraph Tool_Framework["@buildpilot/tools Framework"]
+        Registry["ToolRegistry.execute(name, args, context, options)"]
+        Lookup{"Tool Registered?"}
+        Policy{"Permission Policy Allowed?\n(READ_ONLY / SAFE_WRITE / HIGH_RISK)"}
+        ZodVal{"Zod inputSchema.safeParse()"}
+        ExecWrapper["execute(typedInput, context)\n[with AbortSignal + timeoutMs]"]
+    end
+
+    subgraph Outcomes["Execution Outcomes"]
+        Success["Return { success: true, data, durationMs }"]
+        ZodFail["Throw ToolValidationError\n(Returns structured errors to LLM)"]
+        PermFail["Throw ToolPermissionError\n(Blocks unauthorized action)"]
+        TimeFail["Throw ToolTimeoutError\n(Prevents hung processes)"]
+    end
+
+    Call --> Registry
+    Registry --> Lookup
+    Lookup -->|No| Outcomes
+    Lookup -->|Yes| Policy
+    Policy -->|Denied| PermFail
+    Policy -->|Allowed| ZodVal
+    ZodVal -->|Invalid| ZodFail
+    ZodVal -->|Valid| ExecWrapper
+    ExecWrapper -->|Timed Out| TimeFail
+    ExecWrapper -->|Completed| Success
+```
+
+#### 💡 Core Concepts & Why It's Built This Way:
+- **Type-Safe Tool Contract**: Each tool defines an `inputSchema` using Zod. Runtime inputs from LLM responses are parsed through this schema, ensuring tool implementations receive strictly validated, type-safe arguments.
+- **Granular Permission Classes**:
+  - `READ_ONLY`: Inspection tools (`list_files`, `read_file`, `search_code`, `git_status`) that cannot mutate anything.
+  - `SAFE_WRITE`: Code modification tools (`write_file`) restricted to the task's isolated worktree.
+  - `EXTERNAL_WRITE`: Actions with external side effects (`git_push`, `create_pull_request`).
+  - `HIGH_RISK`: Destructive commands (`rm -rf`, system services, deploys) requiring explicit human approval.
+- **Fail-Fast Execution Protection**:
+  - Per-tool timeouts prevent hanging scripts from exhausting worker concurrency.
+  - `AbortSignal` listener ensures that if a task is cancelled from the dashboard, child tool executions terminate immediately.
+
+#### 🧪 How to Manually Run & Test:
+
+##### Step 1: Run the Tool Package Unit Tests
+```bash
+pnpm --filter @buildpilot/tools test
+```
+**Expected Output:**
+```text
+ ✓ src/index.test.ts (1 test)
+ ✓ src/registry.test.ts (7 tests)
+ Test Files  2 passed (2)
+      Tests  8 passed (8)
+```
+
+##### Step 2: Run Full Monorepo Test Suite
+```bash
+pnpm test
+```
 Verify that all 21 test suites pass cleanly across all 12 monorepo packages.
+
 
 
 

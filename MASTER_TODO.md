@@ -237,12 +237,12 @@ Next TODO: <next unchecked task>
 
 ## Phase 7 — First Tool Registry
 
-- [ ] **Task 7.1 — Typed tool framework**
-  - [ ] Create `packages/tools` package.
-  - [ ] Implement typed tool definition interface (`name`, `description`, `inputSchema`, `outputSchema`, `permissionClass`, `timeout`, `execute`).
-  - [ ] Implement `ToolRegistry` with lookup, registration, and unknown tool rejection.
-  - [ ] Define permission classes: `READ_ONLY`, `SAFE_WRITE`, `EXTERNAL_WRITE`, `HIGH_RISK`.
-  - **Acceptance Criteria:** Registry validates tool inputs via Zod and enforces permission classes.
+- [x] **Task 7.1 — Typed tool framework**
+  - [x] Create `packages/tools` package.
+  - [x] Implement typed tool definition interface (`name`, `description`, `inputSchema`, `outputSchema`, `permissionClass`, `timeout`, `execute`).
+  - [x] Implement `ToolRegistry` with lookup, registration, and unknown tool rejection.
+  - [x] Define permission classes: `READ_ONLY`, `SAFE_WRITE`, `EXTERNAL_WRITE`, `HIGH_RISK`.
+  - **Acceptance Criteria:** Registry validates tool inputs via Zod and enforces permission classes. (PASSED ✅)
 
 - [ ] **Task 7.2 — Repository tools**
   - [ ] Implement `list_files` tool (with path filtering, glob patterns, max depth).
