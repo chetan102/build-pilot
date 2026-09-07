@@ -543,10 +543,10 @@ Next TODO: <next unchecked task>
 
 ## Phase 20 — Evaluation & Benchmark Harness
 
-- [ ] **Task 20.1 — Benchmark task suite**
-  - [ ] Create benchmark task repository with 20 deterministic coding tasks.
-  - [ ] Include seeded bugs, test suites, and expected diffs.
-  - **Acceptance Criteria:** Benchmark suite covers bug fixes, refactoring, feature additions, and tests.
+- [x] **Task 20.1 — Benchmark task suite**
+  - [x] Create benchmark task repository with 20 deterministic coding tasks.
+  - [x] Include seeded bugs, test suites, and expected diffs.
+  - **Acceptance Criteria:** Benchmark suite covers bug fixes, refactoring, feature additions, and tests. (PASSED ✅)
 
 - [ ] **Task 20.2 — Automated benchmark runner**
   - [ ] Script to execute benchmark tasks across selected models and providers.

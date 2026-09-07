@@ -204,6 +204,31 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@20.19.43)
 
+  packages/benchmark:
+    dependencies:
+      '@buildpilot/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@buildpilot/llm':
+        specifier: workspace:*
+        version: link:../llm
+      '@buildpilot/observability':
+        specifier: workspace:*
+        version: link:../observability
+      '@buildpilot/tools':
+        specifier: workspace:*
+        version: link:../tools
+    devDependencies:
+      '@types/node':
+        specifier: ^20.17.10
+        version: 20.19.43
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@20.19.43)
+
   packages/config:
     dependencies:
       dotenv:
