@@ -596,10 +596,10 @@ Next TODO: <next unchecked task>
   - [x] Measure resource consumption (CPU, RAM, disk I/O).
   - **Acceptance Criteria:** Concurrent tasks execute without resource collisions. (PASSED ✅)
 
-- [ ] **Task 22.2 — Worker clustering**
-  - [ ] Scale to multiple worker replicas sharing BullMQ queue.
-  - [ ] Validate lock acquisition and job distribution.
-  - **Acceptance Criteria:** Jobs are distributed evenly across worker replicas.
+- [x] **Task 22.2 — Worker clustering**
+  - [x] Scale to multiple worker replicas sharing BullMQ queue.
+  - [x] Validate lock acquisition and job distribution.
+  - **Acceptance Criteria:** Jobs are distributed evenly across worker replicas. (PASSED ✅)
 
 - [ ] **Task 22.3 — Performance bottleneck analysis**
   - [ ] Profile database queries, Redis traffic, sandbox spin-up times, and LLM latency.
