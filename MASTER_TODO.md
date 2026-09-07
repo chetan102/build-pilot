@@ -449,11 +449,11 @@ Next TODO: <next unchecked task>
   - [x] Verify state transitions from QUEUED to COMPLETED.
   - **Acceptance Criteria:** Automated E2E test passes in CI. (PASSED ✅)
 
-- [ ] **Task 15.4 — Browser verification (Playwright)**
-  - [ ] Configure Playwright runner in sandbox.
-  - [ ] Run browser smoke tests for frontend tasks.
-  - [ ] Capture screenshots and traces on failure.
-  - **Acceptance Criteria:** Agent captures browser verification artifacts for UI tasks.
+- [x] **Task 15.4 — Browser verification (Playwright)**
+  - [x] Configure Playwright runner in sandbox.
+  - [x] Run browser smoke tests for frontend tasks.
+  - [x] Capture screenshots and traces on failure.
+  - **Acceptance Criteria:** Agent captures browser verification artifacts for UI tasks. (PASSED ✅)
 
 ---
 
