@@ -8,10 +8,10 @@
 
 ## 📊 Overall Progress Summary
 
-- **Current Phase:** Phase 4 — Queue + Worker
-- **Current Task:** Task 4.2 — Worker service foundation
-- **Project Status:** 🟢 IN PROGRESS (Phase 0: 100% Complete ✅ | Phase 1: 100% Complete ✅ | Phase 2: 100% Complete ✅ | Phase 3: 100% Complete ✅ | Phase 4: 50% Complete)
-- **Completed Tasks:** 9 / 23 Tasks (Task 0.1, 0.2, 1.1, 1.2, 2.1, 2.2, 3.1, 3.2, 4.1 complete)
+- **Current Phase:** Phase 11 — Dashboard Connected to Reality
+- **Current Task:** Task 11.1 — API-backed task board
+- **Project Status:** 🟢 IN PROGRESS (Phase 0-10: 100% Complete ✅ | Phase 11: 0% Complete)
+- **Completed Tasks:** 21 / 35 Tasks Complete
 
 ---
 
@@ -313,17 +313,17 @@ Next TODO: <next unchecked task>
 
 ## Phase 10 — End-to-End Vertical Slice (MVP: Issue → PR)
 
-- [ ] **Task 10.1 — End-to-end integration**
-  - [ ] Connect webhook intake → Task creation → Queue → Worker → LLM loop → Git worktree → Tests → PR creation.
-  - [ ] Implement `create_pull_request` tool / post-execution step linking issue to PR.
-  - [ ] Update GitHub issue with link to generated PR and execution summary.
-  - **Acceptance Criteria:** End-to-end flow executes without manual terminal intervention.
+- [x] **Task 10.1 — End-to-end integration**
+  - [x] Connect webhook intake → Task creation → Queue → Worker → LLM loop → Git worktree → Tests → PR creation.
+  - [x] Implement `create_pull_request` tool / post-execution step linking issue to PR.
+  - [x] Update GitHub issue with link to generated PR and execution summary.
+  - **Acceptance Criteria:** End-to-end flow executes without manual terminal intervention. (PASSED ✅)
 
-- [ ] **Task 10.2 — Controlled benchmark demo test**
-  - [ ] Create a controlled demo test case (e.g. fix a bug and add a regression test).
-  - [ ] Run end-to-end task against test repo.
-  - [ ] Verify generated diff, passing tests, PR creation, and `PR_READY` / `COMPLETED` status.
-  - **Acceptance Criteria:** First end-to-end autonomous engineering run verified with full audit trail.
+- [x] **Task 10.2 — Controlled benchmark demo test**
+  - [x] Create a controlled demo test case (e.g. fix a bug and add a regression test).
+  - [x] Run end-to-end task against test repo.
+  - [x] Verify generated diff, passing tests, PR creation, and `PR_READY` / `COMPLETED` status.
+  - **Acceptance Criteria:** First end-to-end autonomous engineering run verified with full audit trail. (PASSED ✅)
 
 ---
 

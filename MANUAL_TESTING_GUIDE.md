@@ -1334,3 +1334,76 @@ curl -s -X POST http://localhost:4000/api/v1/github/webhooks \
   "projectId": "<GENERATED_PROJECT_ID>"
 }
 ```
+
+---
+
+## Phase 10 — End-to-End Vertical Slice (MVP: Issue → Code Fix → Tests → PR)
+
+### Tasks 10.1 & 10.2: End-to-End Vertical Slice Integration & Benchmark Demo
+
+#### 📂 Key Files to Study:
+- [`apps/worker/src/worker.ts`](./apps/worker/src/worker.ts) — Full autonomous agent worker pipeline wiring queue consumption, LLM reasoning loop, tool execution, and database persistence.
+- [`packages/tools/src/execution/execution-tools.ts`](./packages/tools/src/execution/execution-tools.ts) — `create_pull_request` tool allowing agents to synthesize PRs linking directly to target issues.
+- [`apps/worker/src/e2e-vertical-slice.test.ts`](./apps/worker/src/e2e-vertical-slice.test.ts) — Complete end-to-end integration test simulating an autonomous agent fixing a seeded bug, running unit tests, and opening a PR.
+
+#### 🔄 Complete End-to-End Autonomous Pipeline:
+```mermaid
+sequenceDiagram
+    autonumber
+    participant GitHub as GitHub Issue / Webhook
+    participant API as Express API
+    participant Queue as BullMQ (engineering-task)
+    participant Worker as Agent Worker Service
+    participant Loop as Agent Core Loop
+    participant LLM as Frontier LLM (Claude 3.5 Sonnet)
+    participant Tools as Tool Registry (Workspace Tools)
+    participant Worktree as Git Worktree
+
+    GitHub->>API: 1. Webhook (Issue labeled 'buildpilot')
+    API->>Queue: 2. Enqueue Task (taskId: 6a9cf..., branch: buildpilot/task-101)
+    Queue->>Worker: 3. Worker picks up job
+    Worker->>Loop: 4. Start agent loop (task context, prompt, tools)
+    
+    Loop->>LLM: 5. Search repository for relevant code
+    LLM-->>Tools: 6. search_code("function add")
+    Tools-->>LLM: 7. Found bug in src/calculator.ts: return a - b
+    
+    Loop->>LLM: 8. Fix the bug
+    LLM-->>Tools: 9. write_file("src/calculator.ts", "return a + b;")
+    Tools-->>Worktree: 10. File modified in isolated worktree
+    
+    Loop->>LLM: 11. Run test suite to verify fix
+    LLM-->>Tools: 12. run_tests("npm test")
+    Tools-->>LLM: 13. Exit Code 0 (All tests passing)
+    
+    Loop->>LLM: 14. Open Pull Request
+    LLM-->>Tools: 15. create_pull_request(title, body)
+    Tools-->>Loop: 16. PR #42 Created
+    
+    Loop-->>Worker: 17. Final Answer: "Bug fixed, verified, PR created."
+    Worker->>API: 18. Task transitioned to COMPLETED
+```
+
+#### 💡 Core Concepts & Why It's Built This Way:
+- **True Autonomous Engineering**: Unlike simple code-completion tools, BuildPilot orchestrates the complete software engineering lifecycle: issue intake $\rightarrow$ codebase exploration $\rightarrow$ targeted modifications $\rightarrow$ test verification $\rightarrow$ Pull Request creation without human intervention.
+- **Deterministic Verification Loop**: Code changes are not pushed blindly. The agent is forced to execute `run_tests` and receive an exit code of `0` before it is authorized to propose a Pull Request.
+- **Full Traceability & Audit Trail**: Every prompt, thought, tool execution, test output, and state transition is immutably persisted in MongoDB and streamed to the dashboard.
+
+#### 🧪 How to Manually Run & Test:
+
+##### Step 1: Run Full End-to-End Integration Suite
+```bash
+pnpm --filter @buildpilot/worker test src/e2e-vertical-slice.test.ts
+```
+**Expected Output:**
+```text
+ ✓ src/e2e-vertical-slice.test.ts (1 test)
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+```
+
+##### Step 2: Run Monorepo Verification
+```bash
+pnpm test && pnpm run typecheck
+```
+Verify that all 21 test suites pass with 100% success rate across all 12 monorepo packages.

@@ -48,6 +48,7 @@ describe('WorkerService Lifecycle & Job Processing', () => {
       taskRepository: mockTaskRepo,
       taskRunRepository: mockTaskRunRepo,
       eventRepository: mockEventRepo,
+      jobExecutor: vi.fn().mockResolvedValue({ success: true }),
     });
 
     const mockJob = {
@@ -144,6 +145,7 @@ describe('WorkerService Lifecycle & Job Processing', () => {
       taskRepository: mockTaskRepo,
       taskRunRepository: mockTaskRunRepo,
       eventRepository: mockEventRepo,
+      jobExecutor: vi.fn().mockResolvedValue({ success: true }),
     });
 
     const mockJob = {

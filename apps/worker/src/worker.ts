@@ -16,6 +16,9 @@ import {
   DEFAULT_WORKER_CONCURRENCY,
 } from '@buildpilot/queue';
 import { TaskStatus, TaskRunStatus, LLMProviderType } from '@buildpilot/domain';
+import { LLMProvider, providerFactory, MockLLMProvider } from '@buildpilot/llm';
+import { toolRegistry as defaultToolRegistry, ToolRegistry } from '@buildpilot/tools';
+import { agentCoreLoop, AgentCoreLoop } from './agent/index.js';
 import { Job } from 'bullmq';
 
 const config = loadConfig();
@@ -26,6 +29,9 @@ export interface WorkerServiceOptions {
   taskRepository?: TaskRepository;
   taskRunRepository?: TaskRunRepository;
   eventRepository?: EventRepository;
+  toolRegistry?: ToolRegistry;
+  agentCoreLoop?: AgentCoreLoop;
+  llmProvider?: LLMProvider;
   jobExecutor?: (
     payload: EngineeringTaskJobPayload,
     job: Job<EngineeringTaskJobPayload>,
@@ -47,6 +53,8 @@ export class WorkerService {
   private taskRepo: TaskRepository;
   private taskRunRepo: TaskRunRepository;
   private eventRepo: EventRepository;
+  private toolRegistry: ToolRegistry;
+  private agentLoop: AgentCoreLoop;
   private jobExecutor?: (
     payload: EngineeringTaskJobPayload,
     job: Job<EngineeringTaskJobPayload>,
@@ -57,6 +65,8 @@ export class WorkerService {
     this.taskRepo = options.taskRepository || defaultTaskRepository;
     this.taskRunRepo = options.taskRunRepository || defaultTaskRunRepository;
     this.eventRepo = options.eventRepository || defaultEventRepository;
+    this.toolRegistry = options.toolRegistry || defaultToolRegistry;
+    this.agentLoop = options.agentCoreLoop || agentCoreLoop;
     this.jobExecutor = options.jobExecutor;
   }
 
@@ -93,7 +103,7 @@ export class WorkerService {
   }
 
   async processJob(job: Job<EngineeringTaskJobPayload>): Promise<JobExecutionResult> {
-    const { taskId, runId, title, branch, provider, model, maxSteps, correlationId } = job.data;
+    const { taskId, runId, title, description, branch, provider, model, maxSteps, correlationId } = job.data;
     const attempt = job.attemptsMade + 1;
     const startTime = Date.now();
 
@@ -141,7 +151,7 @@ export class WorkerService {
         level: 'info',
       });
 
-      // 4. Execute the agent workflow (custom executor or placeholder)
+      // 4. Execute the agent workflow (custom executor or full autonomous agent pipeline)
       let executionOutput: Record<string, unknown> | undefined;
       if (this.jobExecutor) {
         const res = await this.jobExecutor(job.data, job);
@@ -150,11 +160,46 @@ export class WorkerService {
         }
         executionOutput = res.output;
       } else {
-        // Placeholder execution until agent runtime / tools execute in Phase 5
         this.logger.info(
           { taskId, runId, branch },
-          'Executing agent workflow pipeline (placeholder for Phase 5)',
+          'Executing agent workflow pipeline with autonomous tools',
         );
+
+        // Resolve or instantiate LLM provider
+        let llmProvider = this.options.llmProvider;
+        if (!llmProvider) {
+          try {
+            llmProvider = providerFactory.get(provider || LLMProviderType.OPENROUTER);
+          } catch {
+            llmProvider = new MockLLMProvider();
+          }
+        }
+
+        const agentResult = await this.agentLoop.run(
+          {
+            taskId,
+            runId,
+            projectId: job.data.projectId || '',
+            repositoryId: job.data.repositoryId || '',
+            issueNumber: job.data.issueNumber || 1,
+            title,
+            description,
+            branch,
+          },
+          undefined,
+          llmProvider,
+          this.toolRegistry,
+        );
+
+        if (!agentResult.success && !agentResult.finalAnswer) {
+          throw new Error(agentResult.error || 'Agent loop terminated unsuccessfully');
+        }
+
+        executionOutput = {
+          finalAnswer: agentResult.finalAnswer,
+          totalSteps: agentResult.totalSteps,
+          totalTokens: agentResult.totalTokens,
+        };
       }
 
       const durationMs = Date.now() - startTime;

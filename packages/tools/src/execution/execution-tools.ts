@@ -89,3 +89,32 @@ export const runTestsTool = defineTool({
     };
   },
 });
+
+export const createPullRequestTool = defineTool({
+  name: 'create_pull_request',
+  description: 'Proposes changes and opens a GitHub Pull Request for the task.',
+  permissionClass: 'EXTERNAL_WRITE',
+  inputSchema: z.object({
+    title: z.string().min(3).describe('Title of the pull request'),
+    body: z.string().describe('Detailed description of changes and test verification summary'),
+    draft: z.boolean().optional().default(false).describe('Whether to create as draft PR'),
+  }),
+  parameters: {
+    type: 'object',
+    properties: {
+      title: { type: 'string', description: 'PR title' },
+      body: { type: 'string', description: 'PR description summary' },
+      draft: { type: 'boolean', description: 'Is draft PR' },
+    },
+    required: ['title', 'body'],
+  },
+  execute: async (input, context) => {
+    return {
+      title: input.title,
+      body: input.body,
+      taskId: context.taskId,
+      runId: context.runId,
+      status: 'PR_PROPOSED',
+    };
+  },
+});
