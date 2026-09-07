@@ -444,10 +444,10 @@ Next TODO: <next unchecked task>
   - [x] Worker ↔ Git worktree integration tests.
   - **Acceptance Criteria:** Integration test suite passes against local containerized test DB and Redis. (PASSED ✅)
 
-- [ ] **Task 15.3 — End-to-end automated tests**
-  - [ ] Simulate GitHub webhook → Task → Agent run → PR output.
-  - [ ] Verify state transitions from QUEUED to COMPLETED.
-  - **Acceptance Criteria:** Automated E2E test passes in CI.
+- [x] **Task 15.3 — End-to-end automated tests**
+  - [x] Simulate GitHub webhook → Task → Agent run → PR output.
+  - [x] Verify state transitions from QUEUED to COMPLETED.
+  - **Acceptance Criteria:** Automated E2E test passes in CI. (PASSED ✅)
 
 - [ ] **Task 15.4 — Browser verification (Playwright)**
   - [ ] Configure Playwright runner in sandbox.
