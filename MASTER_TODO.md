@@ -336,12 +336,12 @@ Next TODO: <next unchecked task>
   - [x] Implement pagination / infinite scroll.
   - **Acceptance Criteria:** Dashboard shows live tasks from database instead of mock data. (PASSED ✅)
 
-- [ ] **Task 11.2 — Live timeline & Server-Sent Events (SSE)**
-  - [ ] Implement `GET /api/v1/tasks/:taskId/events` SSE endpoint in Express API.
-  - [ ] Implement SSE client hook with automatic reconnection in Next.js dashboard.
-  - [ ] Stream real-time agent steps, tool calls, and test outputs as they occur.
-  - [ ] Render interactive step cards with timestamps, durations, and tool inputs/outputs.
-  - **Acceptance Criteria:** Browser updates live during agent execution and reconnects cleanly on network interruption.
+- [x] **Task 11.2 — Live timeline & Server-Sent Events (SSE)**
+  - [x] Implement `GET /api/v1/tasks/:taskId/events` SSE endpoint in Express API.
+  - [x] Implement SSE client hook with automatic reconnection in Next.js dashboard.
+  - [x] Stream real-time agent steps, tool calls, and test outputs as they occur.
+  - [x] Render interactive step cards with timestamps, durations, and tool inputs/outputs.
+  - **Acceptance Criteria:** Browser updates live during agent execution and reconnects cleanly on network interruption. (PASSED ✅)
 
 - [ ] **Task 11.3 — Task detail view**
   - [ ] Display GitHub issue context, repository, and branch info.
