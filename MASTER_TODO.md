@@ -513,10 +513,10 @@ Next TODO: <next unchecked task>
   - [x] Provide tools to query tasks, runs, status, and logs.
   - **Acceptance Criteria:** External AI tools can query BuildPilot via MCP. (PASSED ✅)
 
-- [ ] **Task 18.3 — External MCP integration & safety gates**
-  - [ ] Support connecting external MCP servers with permission class assignment.
-  - [ ] Audit and persist all MCP tool invocations.
-  - **Acceptance Criteria:** MCP tools adhere to the same permission and audit gates as native tools.
+- [x] **Task 18.3 — External MCP integration & safety gates**
+  - [x] Support connecting external MCP servers with permission class assignment.
+  - [x] Audit and persist all MCP tool invocations.
+  - **Acceptance Criteria:** MCP tools adhere to the same permission and audit gates as native tools. (PASSED ✅)
 
 ---
 
