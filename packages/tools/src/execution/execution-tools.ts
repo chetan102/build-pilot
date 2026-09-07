@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { defineTool } from '../define-tool.js';
-import { executeCommand } from './command-runner.js';
+import { defaultDockerRunner } from '../sandbox/docker-runner.js';
 
 export const runCommandTool = defineTool({
   name: 'run_command',
@@ -23,13 +23,14 @@ export const runCommandTool = defineTool({
     required: ['command'],
   },
   execute: async (input, context) => {
-    const result = await executeCommand({
+    const result = await defaultDockerRunner.run({
       command: input.command,
       workspaceDir: context.workspaceDir,
       cwd: input.cwd,
       env: input.env,
       timeoutMs: input.timeoutMs || 60000,
       signal: context.signal,
+      useLocalFallback: process.env.BUILDPILOT_LOCAL_EXEC === 'true' || process.env.NODE_ENV === 'test',
     });
 
     return {
@@ -68,11 +69,12 @@ export const runTestsTool = defineTool({
       command = `${command} ${input.testFile}`;
     }
 
-    const result = await executeCommand({
+    const result = await defaultDockerRunner.run({
       command,
       workspaceDir: context.workspaceDir,
       timeoutMs: input.timeoutMs || 120000,
       signal: context.signal,
+      useLocalFallback: process.env.BUILDPILOT_LOCAL_EXEC === 'true' || process.env.NODE_ENV === 'test',
     });
 
     const passed = result.exitCode === 0;

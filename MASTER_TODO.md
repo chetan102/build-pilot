@@ -8,10 +8,10 @@
 
 ## 📊 Overall Progress Summary
 
-- **Current Phase:** Phase 13 — Sandbox Execution
-- **Current Task:** Task 13.1 — Docker sandbox runner
-- **Project Status:** 🟢 IN PROGRESS (Phase 0-12: 100% Complete ✅ | Phase 13: 0% Complete)
-- **Completed Tasks:** 27 / 35 Tasks Complete
+- **Current Phase:** Phase 14 — Agent Roles & Orchestration
+- **Current Task:** Task 14.1 — Planner role
+- **Project Status:** 🟢 IN PROGRESS (Phase 0-13: 100% Complete ✅ | Phase 14: 0% Complete)
+- **Completed Tasks:** 30 / 35 Tasks Complete
 
 ---
 
@@ -390,10 +390,10 @@ Next TODO: <next unchecked task>
   - [x] Add automatic container cleanup on completion, error, or crash.
   - **Acceptance Criteria:** Host system is completely protected from untrusted code execution. (PASSED ✅)
 
-- [ ] **Task 13.3 — Tool sandbox routing**
-  - [ ] Route `run_command` and `run_tests` through Docker sandbox.
-  - [ ] Persist command outputs and test artifacts.
-  - **Acceptance Criteria:** All code changes and tests execute exclusively inside Docker sandbox.
+- [x] **Task 13.3 — Tool sandbox routing**
+  - [x] Route `run_command` and `run_tests` through Docker sandbox.
+  - [x] Persist command outputs and test artifacts.
+  - **Acceptance Criteria:** All code changes and tests execute exclusively inside Docker sandbox. (PASSED ✅)
 
 ---
 
