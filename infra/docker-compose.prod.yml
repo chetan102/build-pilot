@@ -1,0 +1,115 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: buildpilot-caddy
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - buildpilot-network
+    depends_on:
+      - api
+      - web
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    container_name: buildpilot-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      MONGODB_URI: mongodb://mongodb:27017/buildpilot
+      REDIS_URL: redis://redis:6379
+      BUILDPILOT_API_KEY: ${BUILDPILOT_API_KEY}
+    networks:
+      - buildpilot-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ..
+      dockerfile: apps/worker/Dockerfile
+    container_name: buildpilot-worker
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      MONGODB_URI: mongodb://mongodb:27017/buildpilot
+      REDIS_URL: redis://redis:6379
+      WORKER_CONCURRENCY: 3
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - worktrees_data:/tmp/buildpilot/worktrees
+    networks:
+      - buildpilot-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+    container_name: buildpilot-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      NEXT_PUBLIC_API_URL: http://api:4000
+    networks:
+      - buildpilot-network
+    depends_on:
+      - api
+
+  mongodb:
+    image: mongo:7.0
+    container_name: buildpilot-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: buildpilot
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - buildpilot-network
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: buildpilot-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - buildpilot-network
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  buildpilot-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
+  worktrees_data:

@@ -561,10 +561,10 @@ Next TODO: <next unchecked task>
 
 ## Phase 21 — Production Hardening & Deployment
 
-- [ ] **Task 21.1 — Authentication & Authorization**
-  - [ ] Add user authentication (NextAuth / JWT / session tokens).
-  - [ ] Protect API and dashboard routes.
-  - **Acceptance Criteria:** Unauthorized requests are rejected.
+- [x] **Task 21.1 — Authentication & Authorization**
+  - [x] Add user authentication (NextAuth / JWT / session tokens).
+  - [x] Protect API and dashboard routes.
+  - **Acceptance Criteria:** Unauthorized requests are rejected. (PASSED ✅)
 
 - [ ] **Task 21.2 — Secrets management**
   - [ ] Server-side secret encryption at rest for user API keys.

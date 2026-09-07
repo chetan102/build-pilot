@@ -7,5 +7,7 @@ export function generateCorrelationId(prefix = 'bp'): string {
 }
 
 export * from './idempotency.js';
+export * from './crypto.js';
+
 
 
