@@ -253,12 +253,12 @@ Next TODO: <next unchecked task>
   - [x] Implement `git_diff` tool.
   - **Acceptance Criteria:** Agent can inspect repository structure, search contents, read files, and write modifications. (PASSED ✅)
 
-- [ ] **Task 7.3 — Execution tools**
-  - [ ] Implement `run_command` tool (executes shell command in controlled workspace).
-  - [ ] Implement `run_tests` tool (executes configured test suite).
-  - [ ] Capture stdout, stderr, exit code, duration, and output size limits.
-  - [ ] Enforce strict execution timeouts.
-  - **Acceptance Criteria:** Agent can run tests and commands with captured outputs, exit codes, and enforced timeouts.
+- [x] **Task 7.3 — Execution tools**
+  - [x] Implement `run_command` tool (executes shell command in controlled workspace).
+  - [x] Implement `run_tests` tool (executes configured test suite).
+  - [x] Capture stdout, stderr, exit code, duration, and output size limits.
+  - [x] Enforce strict execution timeouts.
+  - **Acceptance Criteria:** Agent can run tests and commands with captured outputs, exit codes, and enforced timeouts. (PASSED ✅)
 
 ---
 

@@ -4,11 +4,13 @@ export * from './errors.js';
 export * from './define-tool.js';
 export * from './registry.js';
 export * from './repository/index.js';
+export * from './execution/index.js';
 
 import { toolRegistry } from './registry.js';
 import { readFileTool, writeFileTool } from './repository/file-tools.js';
 import { listFilesTool, searchCodeTool } from './repository/search-tools.js';
 import { gitStatusTool, gitDiffTool } from './repository/git-tools.js';
+import { runCommandTool, runTestsTool } from './execution/execution-tools.js';
 
 export function registerDefaultTools(registry = toolRegistry) {
   registry.register(readFileTool);
@@ -17,8 +19,10 @@ export function registerDefaultTools(registry = toolRegistry) {
   registry.register(searchCodeTool);
   registry.register(gitStatusTool);
   registry.register(gitDiffTool);
+  registry.register(runCommandTool);
+  registry.register(runTestsTool);
   return registry;
 }
 
-// Automatically register default repo tools on global instance
+// Automatically register default tools on global instance
 registerDefaultTools(toolRegistry);

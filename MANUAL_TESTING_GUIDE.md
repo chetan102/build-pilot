@@ -1120,6 +1120,70 @@ pnpm test
 ```
 Verify that all 21 test suites pass cleanly across all 12 monorepo packages.
 
+---
+
+### Task 7.3: Execution Tools (`run_command`, `run_tests`)
+
+#### 📂 Key Files to Study:
+- [`packages/tools/src/execution/command-runner.ts`](./packages/tools/src/execution/command-runner.ts) — Process execution engine with stdout/stderr stream capture, buffer size cap (500KB), timeout enforcement, and SIGKILL escalation.
+- [`packages/tools/src/execution/execution-tools.ts`](./packages/tools/src/execution/execution-tools.ts) — `run_command` (shell command runner with exit code handling) and `run_tests` (automated test runner and pass/fail summary generator).
+- [`packages/tools/src/execution/execution.test.ts`](./packages/tools/src/execution/execution.test.ts) — Unit test suite verifying output streaming, exit code capture, timeout termination, and test runner pass/fail logic.
+
+#### 🔄 Process Execution Architecture:
+```mermaid
+flowchart TD
+    subgraph Agent["Agent Core Loop"]
+        CallCmd["run_command({ command, cwd, timeoutMs })"]
+        CallTest["run_tests({ testCommand, testFile })"]
+    end
+
+    subgraph Runner["executeCommand (command-runner.ts)"]
+        Resolve["resolveSafePath(workspaceDir, cwd)"]
+        Spawn["spawn(command, { cwd, shell, CI: 'true' })"]
+        Timer["Timer (timeoutMs) -> SIGTERM -> SIGKILL"]
+        Buffer["stdout/stderr buffer (capped at 500KB)"]
+    end
+
+    subgraph Output["Standardized Execution Result"]
+        Payload["{ success: exitCode === 0, exitCode, stdout, stderr, durationMs, timedOut, truncated }"]
+    end
+
+    CallCmd --> Resolve
+    CallTest --> Resolve
+    Resolve --> Spawn
+    Spawn --> Timer
+    Spawn --> Buffer
+    Spawn -->|Process Closes| Payload
+```
+
+#### 💡 Core Concepts & Why It's Built This Way:
+- **Streaming Buffer Cap**: Running commands that produce massive logs (e.g. `npm install` or verbose test runs with 200,000 lines) can easily cause Node.js Out-Of-Memory (OOM) crashes. Output streams are capped to 500KB with explicit `truncated: true` metadata.
+- **Two-Phase Process Termination (SIGTERM $\rightarrow$ SIGKILL)**: When a command exceeds its allotted timeout, a gentle `SIGTERM` is sent first to allow graceful exit. If the process does not terminate within 2 seconds, a hard `SIGKILL` is issued to guarantee zero zombie background processes.
+- **CI / Headless Environment Normalization**: Commands are executed with `CI=true` and `FORCE_COLOR=0` to disable interactive CLI prompts (e.g. `y/N` questions that would hang the worker) and strip ANSI color escape sequences from prompt history.
+
+#### 🧪 How to Manually Run & Test:
+
+##### Step 1: Run Execution Tools Unit Tests
+```bash
+pnpm --filter @buildpilot/tools test
+```
+**Expected Output:**
+```text
+ ✓ src/registry.test.ts (7 tests)
+ ✓ src/index.test.ts (1 test)
+ ✓ src/repository/repository.test.ts (5 tests)
+ ✓ src/execution/execution.test.ts (5 tests)
+ Test Files  4 passed (4)
+      Tests  18 passed (18)
+```
+
+##### Step 2: Run Full Monorepo Test Suite
+```bash
+pnpm test
+```
+Verify that all 21 test suites pass cleanly across all 12 monorepo packages.
+
+
 
 
 
