@@ -566,10 +566,10 @@ Next TODO: <next unchecked task>
   - [x] Protect API and dashboard routes.
   - **Acceptance Criteria:** Unauthorized requests are rejected. (PASSED ✅)
 
-- [ ] **Task 21.2 — Secrets management**
-  - [ ] Server-side secret encryption at rest for user API keys.
-  - [ ] Secure environment variable configuration.
-  - **Acceptance Criteria:** Sensitive credentials are encrypted and never leaked in logs.
+- [x] **Task 21.2 — Secrets management**
+  - [x] Server-side secret encryption at rest for user API keys.
+  - [x] Secure environment variable configuration.
+  - **Acceptance Criteria:** Sensitive credentials are encrypted and never leaked in logs. (PASSED ✅)
 
 - [ ] **Task 21.3 — VPS deployment & Caddy reverse proxy**
   - [ ] Production `docker-compose.prod.yml`.
