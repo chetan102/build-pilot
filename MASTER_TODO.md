@@ -406,11 +406,11 @@ Next TODO: <next unchecked task>
   - [x] Persist plan in task artifacts.
   - **Acceptance Criteria:** Planner produces a clear, verified implementation plan before code modification. (PASSED ✅)
 
-- [ ] **Task 14.2 — Developer role**
-  - [ ] Implement Developer agent receiving approved plan.
-  - [ ] Enable write and test tools in isolated worktree.
-  - [ ] Execute code changes and local test cycles.
-  - **Acceptance Criteria:** Developer implements changes adhering to the plan.
+- [x] **Task 14.2 — Developer role**
+  - [x] Implement Developer agent receiving approved plan.
+  - [x] Enable write and test tools in isolated worktree.
+  - [x] Execute code changes and local test cycles.
+  - **Acceptance Criteria:** Developer implements changes adhering to the plan. (PASSED ✅)
 
 - [ ] **Task 14.3 — Reviewer role**
   - [ ] Implement Reviewer agent inspecting final diff against requirements.
