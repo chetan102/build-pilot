@@ -5,6 +5,7 @@ export * from './define-tool.js';
 export * from './registry.js';
 export * from './repository/index.js';
 export * from './execution/index.js';
+export * from './sandbox/docker-runner.js';
 
 import { toolRegistry } from './registry.js';
 import { readFileTool, writeFileTool } from './repository/file-tools.js';

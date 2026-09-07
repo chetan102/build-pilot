@@ -375,12 +375,12 @@ Next TODO: <next unchecked task>
 
 ## Phase 13 — Sandbox Execution
 
-- [ ] **Task 13.1 — Docker sandbox runner**
-  - [ ] Create Docker container runner for isolated command execution.
-  - [ ] Mount only task worktree into container.
-  - [ ] Configure CPU, memory, and runtime limits.
-  - [ ] Stream stdout/stderr from container to worker logs and database.
-  - **Acceptance Criteria:** Commands execute inside disposable containers with resource limits enforced.
+- [x] **Task 13.1 — Docker sandbox runner**
+  - [x] Create Docker container runner for isolated command execution.
+  - [x] Mount only task worktree into container.
+  - [x] Configure CPU, memory, and runtime limits.
+  - [x] Stream stdout/stderr from container to worker logs and database.
+  - **Acceptance Criteria:** Commands execute inside disposable containers with resource limits enforced. (PASSED ✅)
 
 - [ ] **Task 13.2 — Security restrictions & policies**
   - [ ] Disable privileged mode and root execution.
