@@ -582,10 +582,10 @@ Next TODO: <next unchecked task>
   - [x] Document restore and disaster recovery procedure.
   - **Acceptance Criteria:** Backup archive generated and verified via restore test. (PASSED ✅)
 
-- [ ] **Task 21.5 — CI/CD pipeline**
-  - [ ] GitHub Actions workflow for lint, typecheck, unit tests, and build.
-  - [ ] Automated deployment to VPS on push to `main`.
-  - **Acceptance Criteria:** Clean commits trigger automated test and deployment.
+- [x] **Task 21.5 — CI/CD pipeline**
+  - [x] GitHub Actions workflow for lint, typecheck, unit tests, and build.
+  - [x] Automated deployment to VPS on push to `main`.
+  - **Acceptance Criteria:** Clean commits trigger automated test and deployment. (PASSED ✅)
 
 ---
 
