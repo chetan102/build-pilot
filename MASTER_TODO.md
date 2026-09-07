@@ -399,12 +399,12 @@ Next TODO: <next unchecked task>
 
 ## Phase 14 — Agent Roles & Orchestration
 
-- [ ] **Task 14.1 — Planner role**
-  - [ ] Implement Planner agent instructions and prompt.
-  - [ ] Enforce read-only tools for Planner.
-  - [ ] Generate structured implementation plan artifact.
-  - [ ] Persist plan in task artifacts.
-  - **Acceptance Criteria:** Planner produces a clear, verified implementation plan before code modification.
+- [x] **Task 14.1 — Planner role**
+  - [x] Implement Planner agent instructions and prompt.
+  - [x] Enforce read-only tools for Planner.
+  - [x] Generate structured implementation plan artifact.
+  - [x] Persist plan in task artifacts.
+  - **Acceptance Criteria:** Planner produces a clear, verified implementation plan before code modification. (PASSED ✅)
 
 - [ ] **Task 14.2 — Developer role**
   - [ ] Implement Developer agent receiving approved plan.
