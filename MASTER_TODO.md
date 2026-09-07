@@ -577,10 +577,10 @@ Next TODO: <next unchecked task>
   - [x] Harden Linux server (firewall, SSH keys only, non-root containers).
   - **Acceptance Criteria:** Full stack runs in production on a VPS behind HTTPS. (PASSED ✅)
 
-- [ ] **Task 21.4 — Database backup strategy**
-  - [ ] Implement automated MongoDB backup cron job.
-  - [ ] Document restore and disaster recovery procedure.
-  - **Acceptance Criteria:** Backup archive generated and verified via restore test.
+- [x] **Task 21.4 — Database backup strategy**
+  - [x] Implement automated MongoDB backup cron job.
+  - [x] Document restore and disaster recovery procedure.
+  - **Acceptance Criteria:** Backup archive generated and verified via restore test. (PASSED ✅)
 
 - [ ] **Task 21.5 — CI/CD pipeline**
   - [ ] GitHub Actions workflow for lint, typecheck, unit tests, and build.
