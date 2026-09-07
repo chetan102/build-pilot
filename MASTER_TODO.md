@@ -522,11 +522,11 @@ Next TODO: <next unchecked task>
 
 ## Phase 19 — Observability & Telemetry
 
-- [ ] **Task 19.1 — Structured logging**
-  - [ ] Standardize Pino logging schemas across API, Worker, and packages.
-  - [ ] Attach `requestId`, `taskId`, `runId`, `stepId`, `repoId` to all log records.
-  - [ ] Implement automatic secret redaction.
-  - **Acceptance Criteria:** Logs are structured JSON with complete correlation IDs.
+- [x] **Task 19.1 — Structured logging**
+  - [x] Standardize Pino logging schemas across API, Worker, and packages.
+  - [x] Attach `requestId`, `taskId`, `runId`, `stepId`, `repoId` to all log records.
+  - [x] Implement automatic secret redaction.
+  - **Acceptance Criteria:** Logs are structured JSON with complete correlation IDs. (PASSED ✅)
 
 - [ ] **Task 19.2 — OpenTelemetry tracing**
   - [ ] Add OpenTelemetry SDK instrumentation.

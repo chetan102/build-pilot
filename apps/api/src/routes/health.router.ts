@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { dbManager } from '@buildpilot/database';
 import { redisConnectionManager } from '@buildpilot/queue';
+import { metricsRegistry } from '@buildpilot/observability';
 
 export const healthRouter: Router = Router();
 
@@ -28,3 +29,9 @@ healthRouter.get('/ready', async (_req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+healthRouter.get('/metrics', (_req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/plain; version=0.0.4');
+  res.status(200).send(metricsRegistry.toPrometheusText());
+});
+
