@@ -412,11 +412,11 @@ Next TODO: <next unchecked task>
   - [x] Execute code changes and local test cycles.
   - **Acceptance Criteria:** Developer implements changes adhering to the plan. (PASSED ✅)
 
-- [ ] **Task 14.3 — Reviewer role**
-  - [ ] Implement Reviewer agent inspecting final diff against requirements.
-  - [ ] Detect regressions, anti-patterns, or incomplete acceptance criteria.
-  - [ ] Produce structured review report (Approved / Changes Requested).
-  - **Acceptance Criteria:** Reviewer provides independent validation before PR creation.
+- [x] **Task 14.3 — Reviewer role**
+  - [x] Implement Reviewer agent inspecting final diff against requirements.
+  - [x] Detect regressions, anti-patterns, or incomplete acceptance criteria.
+  - [x] Produce structured review report (Approved / Changes Requested).
+  - **Acceptance Criteria:** Reviewer provides independent validation before PR creation. (PASSED ✅)
 
 - [ ] **Task 14.4 — Bounded repair loop**
   - [ ] Feed Reviewer findings or failing test outputs back to Developer.
