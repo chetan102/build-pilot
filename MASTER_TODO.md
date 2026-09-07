@@ -508,10 +508,10 @@ Next TODO: <next unchecked task>
   - [x] Discover MCP tools and adapt them to internal tool registry format.
   - **Acceptance Criteria:** Agent runtime can discover and execute tools from an MCP server. (PASSED ✅)
 
-- [ ] **Task 18.2 — BuildPilot MCP server**
-  - [ ] Expose BuildPilot control plane as an MCP server.
-  - [ ] Provide tools to query tasks, runs, status, and logs.
-  - **Acceptance Criteria:** External AI tools can query BuildPilot via MCP.
+- [x] **Task 18.2 — BuildPilot MCP server**
+  - [x] Expose BuildPilot control plane as an MCP server.
+  - [x] Provide tools to query tasks, runs, status, and logs.
+  - **Acceptance Criteria:** External AI tools can query BuildPilot via MCP. (PASSED ✅)
 
 - [ ] **Task 18.3 — External MCP integration & safety gates**
   - [ ] Support connecting external MCP servers with permission class assignment.
