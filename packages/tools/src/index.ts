@@ -6,6 +6,10 @@ export * from './registry.js';
 export * from './repository/index.js';
 export * from './execution/index.js';
 export * from './sandbox/docker-runner.js';
+export * from './mcp/mcp-client.js';
+export * from './mcp/mcp-server.js';
+export * from './mcp/mcp-safety.js';
+
 
 import { toolRegistry } from './registry.js';
 import { readFileTool, writeFileTool } from './repository/file-tools.js';

@@ -502,11 +502,11 @@ Next TODO: <next unchecked task>
 
 ## Phase 18 — Model Context Protocol (MCP)
 
-- [ ] **Task 18.1 — MCP client integration**
-  - [ ] Implement MCP client in agent runtime (`packages/tools` / `packages/mcp`).
-  - [ ] Connect to local stdio or SSE MCP servers.
-  - [ ] Discover MCP tools and adapt them to internal tool registry format.
-  - **Acceptance Criteria:** Agent runtime can discover and execute tools from an MCP server.
+- [x] **Task 18.1 — MCP client integration**
+  - [x] Implement MCP client in agent runtime (`packages/tools` / `packages/mcp`).
+  - [x] Connect to local stdio or SSE MCP servers.
+  - [x] Discover MCP tools and adapt them to internal tool registry format.
+  - **Acceptance Criteria:** Agent runtime can discover and execute tools from an MCP server. (PASSED ✅)
 
 - [ ] **Task 18.2 — BuildPilot MCP server**
   - [ ] Expose BuildPilot control plane as an MCP server.
