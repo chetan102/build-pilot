@@ -553,9 +553,9 @@ Next TODO: <next unchecked task>
   - [x] Record pass/fail, test results, retries, duration, tool call count, and token cost.
   - **Acceptance Criteria:** Runner produces reproducible benchmark runs. (PASSED ✅)
 
-- [ ] **Task 20.3 — Evaluation dashboard**
-  - [ ] Evaluation UI displaying pass rate, cost comparison, and failure breakdown by provider/model.
-  - **Acceptance Criteria:** Direct comparison report generated for different models.
+- [x] **Task 20.3 — Evaluation dashboard**
+  - [x] Evaluation UI displaying pass rate, cost comparison, and failure breakdown by provider/model.
+  - **Acceptance Criteria:** Direct comparison report generated for different models. (PASSED ✅)
 
 ---
 
