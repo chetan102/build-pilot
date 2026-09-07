@@ -601,25 +601,26 @@ Next TODO: <next unchecked task>
   - [x] Validate lock acquisition and job distribution.
   - **Acceptance Criteria:** Jobs are distributed evenly across worker replicas. (PASSED ✅)
 
-- [ ] **Task 22.3 — Performance bottleneck analysis**
-  - [ ] Profile database queries, Redis traffic, sandbox spin-up times, and LLM latency.
-  - [ ] Document scaling recommendations and optimization points.
-  - **Acceptance Criteria:** Performance profile documented with bottleneck mitigations.
+- [x] **Task 22.3 — Performance bottleneck analysis**
+  - [x] Profile database queries, Redis traffic, sandbox spin-up times, and LLM latency.
+  - [x] Document scaling recommendations and optimization points.
+  - **Acceptance Criteria:** Performance profile documented with bottleneck mitigations. (PASSED ✅)
 
 ---
 
 # 🎯 Definition of Done for Entire Project
 
-- [ ] A real GitHub issue automatically becomes an internal task via webhook.
-- [ ] Tasks survive browser closure and continue running asynchronously.
-- [ ] Entire task lifecycle is persisted in MongoDB and updated in real-time.
-- [ ] AI agent inspects, plans, writes code, and executes tests in isolated worktree and sandbox.
-- [ ] Failed tests trigger bounded autonomous repair loops.
-- [ ] Verified changes are committed to a task branch and opened as a GitHub Pull Request.
-- [ ] Human approval gates protect high-risk actions.
-- [ ] Web dashboard provides live SSE progress streaming, diff viewer, and controls.
-- [ ] LLM layer is provider-agnostic (OpenRouter, Gemini, OpenAI, Anthropic).
-- [ ] Structured logging and OpenTelemetry provide complete auditability.
-- [ ] Benchmark suite objectively measures model performance and reliability.
-- [ ] Deployed with Docker Compose and Caddy on a single VPS with automated CI/CD.
+- [x] A real GitHub issue automatically becomes an internal task via webhook.
+- [x] Tasks survive browser closure and continue running asynchronously.
+- [x] Entire task lifecycle is persisted in MongoDB and updated in real-time.
+- [x] AI agent inspects, plans, writes code, and executes tests in isolated worktree and sandbox.
+- [x] Failed tests trigger bounded autonomous repair loops.
+- [x] Verified changes are committed to a task branch and opened as a GitHub Pull Request.
+- [x] Human approval gates protect high-risk actions.
+- [x] Web dashboard provides live SSE progress streaming, diff viewer, and controls.
+- [x] LLM layer is provider-agnostic (OpenRouter, Gemini, OpenAI, Anthropic).
+- [x] Structured logging and OpenTelemetry provide complete auditability.
+- [x] Benchmark suite objectively measures model performance and reliability.
+- [x] Deployed with Docker Compose and Caddy on a single VPS with automated CI/CD.
+
 
