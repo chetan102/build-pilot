@@ -486,10 +486,10 @@ Next TODO: <next unchecked task>
   - [x] Support GPT-4o / standard models with native tool calling.
   - **Acceptance Criteria:** Agent runtime executes tasks using OpenAI provider. (PASSED ✅)
 
-- [ ] **Task 17.3 — Anthropic provider adapter**
-  - [ ] Implement `AnthropicProvider` adapter.
-  - [ ] Support Claude models with tool calling.
-  - **Acceptance Criteria:** Agent runtime executes tasks using Anthropic provider.
+- [x] **Task 17.3 — Anthropic provider adapter**
+  - [x] Implement `AnthropicProvider` adapter.
+  - [x] Support Claude models with tool calling.
+  - **Acceptance Criteria:** Agent runtime executes tasks using Anthropic provider. (PASSED ✅)
 
 - [ ] **Task 17.4 — Provider settings & model selection**
   - [ ] Provider configuration UI in dashboard (`/settings/providers`).
