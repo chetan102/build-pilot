@@ -475,11 +475,11 @@ Next TODO: <next unchecked task>
 
 ## Phase 17 — Provider Expansion
 
-- [ ] **Task 17.1 — Google Gemini provider adapter**
-  - [ ] Implement `GeminiProvider` adapter using `@google/genai` or Gemini REST API.
-  - [ ] Map tool calling and schema format.
-  - [ ] Normalize errors and token usage.
-  - **Acceptance Criteria:** Agent runtime executes tasks using Gemini model.
+- [x] **Task 17.1 — Google Gemini provider adapter**
+  - [x] Implement `GeminiProvider` adapter using `@google/genai` or Gemini REST API.
+  - [x] Map tool calling and schema format.
+  - [x] Normalize errors and token usage.
+  - **Acceptance Criteria:** Agent runtime executes tasks using Gemini model. (PASSED ✅)
 
 - [ ] **Task 17.2 — OpenAI provider adapter**
   - [ ] Implement direct `OpenAIProvider` adapter.

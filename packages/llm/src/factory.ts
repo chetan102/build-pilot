@@ -5,6 +5,8 @@ import { InvalidRequestError } from './errors.js';
 import { MockLLMProvider } from './base-provider.js';
 import { OpenRouterProvider } from './openrouter.js';
 import { OpenAICompatibleProvider } from './openai-compatible.js';
+import { GeminiProvider } from './gemini.js';
+import { AnthropicProvider } from './anthropic.js';
 
 export type ProviderConstructor = new (id: string, config: ProviderConfig) => LLMProvider;
 export type ProviderFactoryFn = (config: ProviderConfig) => LLMProvider;
@@ -34,6 +36,18 @@ export class ProviderFactory {
         ...config,
         baseUrl: config.baseUrl || 'https://api.openai.com/v1',
       });
+    });
+
+    // Default registration for Gemini Provider
+    this.register(LLMProviderType.GEMINI, (config) => {
+      const id = `gemini:${config.defaultModel || 'default'}`;
+      return new GeminiProvider(id, config);
+    });
+
+    // Default registration for Anthropic Provider
+    this.register(LLMProviderType.ANTHROPIC, (config) => {
+      const id = `anthropic:${config.defaultModel || 'default'}`;
+      return new AnthropicProvider(id, config);
     });
 
     // Default registration for Custom OpenAI-Compatible Provider

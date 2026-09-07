@@ -4,4 +4,7 @@ export * from './errors.js';
 export * from './base-provider.js';
 export * from './openrouter.js';
 export * from './openai-compatible.js';
+export * from './gemini.js';
+export * from './anthropic.js';
 export * from './factory.js';
+
