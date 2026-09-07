@@ -8,10 +8,10 @@
 
 ## 📊 Overall Progress Summary
 
-- **Current Phase:** Phase 11 — Dashboard Connected to Reality
-- **Current Task:** Task 11.1 — API-backed task board
-- **Project Status:** 🟢 IN PROGRESS (Phase 0-10: 100% Complete ✅ | Phase 11: 0% Complete)
-- **Completed Tasks:** 21 / 35 Tasks Complete
+- **Current Phase:** Phase 12 — Reliability & Durable Workflow
+- **Current Task:** Task 12.1 — Persistent state machine & transactional transitions
+- **Project Status:** 🟢 IN PROGRESS (Phase 0-11: 100% Complete ✅ | Phase 12: 0% Complete)
+- **Completed Tasks:** 24 / 35 Tasks Complete
 
 ---
 
@@ -343,12 +343,12 @@ Next TODO: <next unchecked task>
   - [x] Render interactive step cards with timestamps, durations, and tool inputs/outputs.
   - **Acceptance Criteria:** Browser updates live during agent execution and reconnects cleanly on network interruption. (PASSED ✅)
 
-- [ ] **Task 11.3 — Task detail view**
-  - [ ] Display GitHub issue context, repository, and branch info.
-  - [ ] Display interactive execution timeline.
-  - [ ] Display changed files and diff viewer.
-  - [ ] Display test run results and PR links.
-  - **Acceptance Criteria:** User can inspect all details and artifacts of a task run from the web dashboard.
+- [x] **Task 11.3 — Task detail view**
+  - [x] Display GitHub issue context, repository, and branch info.
+  - [x] Display interactive execution timeline.
+  - [x] Display changed files and diff viewer.
+  - [x] Display test run results and PR links.
+  - **Acceptance Criteria:** User can inspect all details and artifacts of a task run from the web dashboard. (PASSED ✅)
 
 ---
 

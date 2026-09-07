@@ -1407,3 +1407,69 @@ pnpm --filter @buildpilot/worker test src/e2e-vertical-slice.test.ts
 pnpm test && pnpm run typecheck
 ```
 Verify that all 21 test suites pass with 100% success rate across all 12 monorepo packages.
+
+---
+
+## Phase 11 — Dashboard Connected to Reality
+
+### Tasks 11.1, 11.2 & 11.3: Real-Time SSE Streaming & Live Task Detail Views
+
+#### 📂 Key Files to Study:
+- [`apps/web/lib/api-client.ts`](./apps/web/lib/api-client.ts) — Typed frontend API client connecting Next.js to Express API (`/api/v1/tasks`, `/api/v1/projects`).
+- [`apps/web/lib/use-task-events.ts`](./apps/web/lib/use-task-events.ts) — Live Server-Sent Events (SSE) streaming React hook with exponential auto-reconnection.
+- [`apps/api/src/routes/tasks.router.ts`](./apps/api/src/routes/tasks.router.ts) — Express route `GET /api/v1/tasks/:taskId/events` streaming text/event-stream events.
+- [`apps/web/app/tasks/page.tsx`](./apps/web/app/tasks/page.tsx) — Real-time Kanban & Table views with live query filtering and pagination.
+- [`apps/web/app/tasks/[taskId]/page.tsx`](./apps/web/app/tasks/[taskId]/page.tsx) — Interactive task detail view with live timeline, diff viewer, and verification results.
+
+#### 🔄 Live Event Streaming Architecture:
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Browser as Next.js Dashboard (apps/web)
+    participant Hook as useTaskEvents Hook
+    participant SSE as GET /api/v1/tasks/:taskId/events
+    participant Emitter as EventRepository (EventEmitter)
+    participant Worker as Background Worker (BullMQ)
+
+    Browser->>Hook: Mount Task Detail Page
+    Hook->>SSE: 1. Connect EventSource
+    SSE-->>Hook: 2. 200 OK (text/event-stream)
+    SSE-->>Hook: 3. Initial connection event + past event replay
+    
+    Worker->>Emitter: 4. Record step / tool execution event
+    Emitter->>SSE: 5. emit("task:6a9cf...", event)
+    SSE-->>Hook: 6. Stream chunk: data: { type: "TASK_RUN_STARTED", ... }
+    Hook-->>Browser: 7. Real-time timeline & status card updates without full-page refresh
+```
+
+#### 💡 Core Concepts & Why It's Built This Way:
+- **Zero WebSocket Overhead**: Server-Sent Events (SSE) provide unidirectional HTTP-native streaming with automatic browser reconnection, header-based proxy friendliness, and zero socket negotiation overhead.
+- **Immediate State Consistency**: When an agent transitions stages or executes tools in the background, the web dashboard updates instantly without polling or manual page refreshes.
+- **Fail-Safe Offline Fixtures**: If the API backend is temporarily unreachable, the frontend gracefully falls back to structured demo fixtures so users can always interact with all visual states.
+
+#### 🧪 How to Manually Run & Test:
+
+##### Step 1: Run Frontend & API Test Suites
+```bash
+pnpm --filter @buildpilot/web test && pnpm --filter @buildpilot/api test
+```
+**Expected Output:**
+```text
+ ✓ lib/api-client.test.ts (5 tests)
+ ✓ src/routes/projects-tasks.test.ts (14 tests)
+ Test Files  5 passed (5)
+      Tests  36 passed (36)
+```
+
+##### Step 2: Stream Live Task Events via Curl
+```bash
+curl -N http://localhost:4000/api/v1/tasks/<TASK_ID>/events
+```
+**Expected Output:**
+```text
+data: {"type":"CONNECTED","taskId":"<TASK_ID>","timestamp":"..."}
+data: {"type":"TASK_CREATED","taskId":"<TASK_ID>", ...}
+data: {"type":"TASK_RUN_STARTED","taskId":"<TASK_ID>", ...}
+: ping
+```
+
