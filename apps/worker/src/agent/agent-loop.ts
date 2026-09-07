@@ -18,6 +18,7 @@ import { AgentStepStage, ToolCallStatus } from '@buildpilot/domain';
 import { createLogger, Logger } from '@buildpilot/observability';
 import { ContextBuilder, contextBuilder as defaultContextBuilder } from './context-builder.js';
 import { TaskContext, RepoContext, TokenBudgetOptions } from './types.js';
+import { retryWithBackoff, LoopDetector, RetryOptions } from './failure-recovery.js';
 
 export interface AgentLoopOptions {
   model?: string;
@@ -26,6 +27,7 @@ export interface AgentLoopOptions {
   perToolTimeoutMs?: number;
   workspaceDir?: string;
   tokenBudget?: Partial<TokenBudgetOptions>;
+  retryOptions?: RetryOptions;
   signal?: AbortSignal;
   logger?: Logger;
   contextBuilder?: ContextBuilder;
@@ -43,6 +45,7 @@ export interface AgentLoopResult {
   durationMs: number;
   error?: string;
   aborted?: boolean;
+  blocked?: boolean;
 }
 
 export class AgentCoreLoop {
@@ -75,6 +78,7 @@ export class AgentCoreLoop {
     const perToolTimeoutMs = this.options.perToolTimeoutMs || 30000;
     const workspaceDir = this.options.workspaceDir || repo?.workspacePath || process.cwd();
     const signal = this.options.signal;
+    const loopDetector = new LoopDetector();
 
     const accumulatedUsage: TokenUsage = {
       promptTokens: 0,
@@ -110,13 +114,11 @@ export class AgentCoreLoop {
 
       // 2. Safety check: Check wall clock limit
       if (Date.now() - startTime > maxWallClockMs) {
-        this.logger.warn(
-          { taskId: task.taskId, runId: task.runId, maxWallClockMs },
-          'Agent loop exceeded max wall-clock duration',
-        );
+        const timeoutError = `Max wall-clock limit of ${maxWallClockMs}ms exceeded`;
+        this.logger.warn({ taskId: task.taskId, runId: task.runId, maxWallClockMs }, timeoutError);
         return {
           success: false,
-          error: `Max wall-clock limit of ${maxWallClockMs}ms exceeded`,
+          error: timeoutError,
           totalSteps: currentStepIndex - 1,
           totalTokens: accumulatedUsage,
           durationMs: Date.now() - startTime,
@@ -143,20 +145,38 @@ export class AgentCoreLoop {
         'Sending step request to LLM provider',
       );
 
-      // 4. Dispatch request to LLM provider
+      // 4. Dispatch request to LLM provider with exponential backoff for transient errors
       let response;
       try {
-        response = await provider.generate({
-          model,
-          systemPrompt: context.systemPrompt,
-          messages: context.messages,
-          tools: availableLLMTools.length > 0 ? availableLLMTools : undefined,
-          toolChoice: availableLLMTools.length > 0 ? 'auto' : undefined,
-          temperature: 0.1,
-        });
+        response = await retryWithBackoff(
+          () =>
+            provider.generate({
+              model,
+              systemPrompt: context.systemPrompt,
+              messages: context.messages,
+              tools: availableLLMTools.length > 0 ? availableLLMTools : undefined,
+              toolChoice: availableLLMTools.length > 0 ? 'auto' : undefined,
+              temperature: 0.1,
+            }),
+          this.options.retryOptions || {
+            maxRetries: 3,
+            initialDelayMs: 500,
+            logger: this.logger,
+          },
+        );
       } catch (err: any) {
-        this.logger.error({ step: currentStepIndex, err }, 'LLM generation failed in agent loop');
-        throw err;
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        this.logger.error({ step: currentStepIndex, err: errorMsg }, 'LLM generation failed after retries');
+        
+        await this.recordFailureEvent(task, currentStepIndex, errorMsg, Date.now() - startTime);
+
+        return {
+          success: false,
+          error: `LLM Provider Error: ${errorMsg}`,
+          totalSteps: currentStepIndex,
+          totalTokens: accumulatedUsage,
+          durationMs: Date.now() - startTime,
+        };
       }
 
       // 5. Track token usage
@@ -243,12 +263,29 @@ export class AgentCoreLoop {
           const errMsg = `Error: Tool '${toolCall.name}' is not registered or supported.`;
           this.logger.warn({ tool: toolCall.name }, 'Model requested unknown tool');
 
+          const loopCheck = loopDetector.recordCall(toolCall.name, toolCall.arguments, false);
           await this.updateToolCallState(toolCallDbId, ToolCallStatus.FAILED, undefined, errMsg, Date.now() - toolStartTime);
+          
+          if (loopCheck.isLoop) {
+            const loopErr = `Infinite failure loop detected: Tool '${toolCall.name}' failed ${loopCheck.count} times consecutively.`;
+            return {
+              success: false,
+              blocked: true,
+              error: loopErr,
+              totalSteps: currentStepIndex,
+              totalTokens: accumulatedUsage,
+              durationMs: Date.now() - startTime,
+            };
+          }
+
           history.push({
             role: 'tool',
             toolCallId: toolCall.id,
             name: toolCall.name,
-            content: JSON.stringify({ error: errMsg }),
+            content: JSON.stringify({
+              error: errMsg,
+              hint: `Available tools are: ${tools.list().map((t) => t.name).join(', ')}. Please use one of the supported tools.`,
+            }),
           });
           continue;
         }
@@ -259,13 +296,37 @@ export class AgentCoreLoop {
           const zodError = `Validation Error in arguments for '${toolCall.name}': ${validation.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ')}`;
           this.logger.warn({ tool: toolCall.name, zodError }, 'Tool call input validation failed');
 
+          const loopCheck = loopDetector.recordCall(toolCall.name, toolCall.arguments, false);
           await this.updateToolCallState(toolCallDbId, ToolCallStatus.FAILED, undefined, zodError, Date.now() - toolStartTime);
+
+          if (loopCheck.isLoop) {
+            const loopErr = `Infinite failure loop detected: Tool '${toolCall.name}' argument validation failed ${loopCheck.count} times.`;
+            return {
+              success: false,
+              blocked: true,
+              error: loopErr,
+              totalSteps: currentStepIndex,
+              totalTokens: accumulatedUsage,
+              durationMs: Date.now() - startTime,
+            };
+          }
+
           history.push({
             role: 'tool',
             toolCallId: toolCall.id,
             name: toolCall.name,
-            content: JSON.stringify({ error: zodError, hint: 'Please correct the arguments and try again.' }),
+            content: JSON.stringify({
+              error: zodError,
+              hint: 'Please check the required argument schema, correct the parameters, and try again.',
+            }),
           });
+
+          if (loopCheck.shouldWarn) {
+            history.push({
+              role: 'user',
+              content: `[SYSTEM WARNING]: Tool '${toolCall.name}' with identical arguments has failed 3 times. Please try a different approach or fix the argument format.`,
+            });
+          }
           continue;
         }
 
@@ -285,6 +346,7 @@ export class AgentCoreLoop {
           );
 
           const toolDurationMs = Date.now() - toolStartTime;
+          loopDetector.recordCall(toolCall.name, toolCall.arguments, true);
           await this.updateToolCallState(toolCallDbId, ToolCallStatus.SUCCESS, toolResult as any, undefined, toolDurationMs);
 
           const stringifiedResult = typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult);
@@ -300,22 +362,48 @@ export class AgentCoreLoop {
           const toolDurationMs = Date.now() - toolStartTime;
           const errorMessage = err instanceof Error ? err.message : String(err);
 
+          const loopCheck = loopDetector.recordCall(toolCall.name, toolCall.arguments, false);
           this.logger.error({ tool: toolCall.name, err: errorMessage, durationMs: toolDurationMs }, 'Tool execution error');
           await this.updateToolCallState(toolCallDbId, ToolCallStatus.FAILED, undefined, errorMessage, toolDurationMs);
+
+          if (loopCheck.isLoop) {
+            const loopErr = `Infinite failure loop detected: Tool '${toolCall.name}' execution failed ${loopCheck.count} consecutive times.`;
+            return {
+              success: false,
+              blocked: true,
+              error: loopErr,
+              totalSteps: currentStepIndex,
+              totalTokens: accumulatedUsage,
+              durationMs: Date.now() - startTime,
+            };
+          }
 
           history.push({
             role: 'tool',
             toolCallId: toolCall.id,
             name: toolCall.name,
-            content: JSON.stringify({ error: `Tool execution error: ${errorMessage}` }),
+            content: JSON.stringify({
+              error: `Tool execution failed: ${errorMessage}`,
+              hint: 'Analyze the error above, make necessary adjustments, or use an alternative tool.',
+            }),
           });
+
+          if (loopCheck.shouldWarn) {
+            history.push({
+              role: 'user',
+              content: `[SYSTEM WARNING]: Tool '${toolCall.name}' with identical parameters has failed 3 times consecutively. Do not repeat this exact command. Try an alternative solution.`,
+            });
+          }
         }
       }
     }
 
+    const stepLimitError = `Agent reached maximum step limit (${maxSteps}) without completing`;
+    await this.recordFailureEvent(task, maxSteps, stepLimitError, Date.now() - startTime);
+
     return {
       success: false,
-      error: `Agent reached maximum step limit (${maxSteps}) without completing`,
+      error: stepLimitError,
       totalSteps: maxSteps,
       totalTokens: accumulatedUsage,
       durationMs: Date.now() - startTime,
@@ -361,6 +449,29 @@ export class AgentCoreLoop {
       });
     } catch {
       // Non-fatal database update failure
+    }
+  }
+
+  private async recordFailureEvent(
+    task: TaskContext,
+    step: number,
+    error: string,
+    durationMs: number,
+  ): Promise<void> {
+    try {
+      await this.eventRepo.create({
+        taskId: task.taskId,
+        runId: task.runId,
+        type: 'AGENT_EXECUTION_FAILED',
+        payload: {
+          step,
+          error,
+          durationMs,
+        },
+        level: 'error',
+      });
+    } catch {
+      // Non-fatal
     }
   }
 }

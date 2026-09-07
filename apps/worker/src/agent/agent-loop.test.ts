@@ -5,10 +5,11 @@ import { ToolRegistry } from '@buildpilot/tools';
 import { MockLLMProvider } from '@buildpilot/llm';
 import { TaskContext, RepoContext } from './types.js';
 
-describe('Agent Runtime — AgentCoreLoop Multi-Step Tool Calling', () => {
+describe('Agent Runtime — AgentCoreLoop Multi-Step Tool Calling & Failure Recovery', () => {
   let mockStepRepo: any;
   let mockToolCallRepo: any;
   let mockEventRepo: any;
+  let mockTaskRunRepo: any;
   let toolRegistry: ToolRegistry;
 
   const sampleTask: TaskContext = {
@@ -46,6 +47,10 @@ describe('Agent Runtime — AgentCoreLoop Multi-Step Tool Calling', () => {
       create: vi.fn().mockResolvedValue({ _id: 'evt_1' }),
     };
 
+    mockTaskRunRepo = {
+      markFailed: vi.fn().mockResolvedValue({ _id: 'run_001' }),
+    };
+
     toolRegistry = new ToolRegistry();
   });
 
@@ -63,6 +68,7 @@ describe('Agent Runtime — AgentCoreLoop Multi-Step Tool Calling', () => {
       agentStepRepository: mockStepRepo,
       toolCallRepository: mockToolCallRepo,
       eventRepository: mockEventRepo,
+      taskRunRepository: mockTaskRunRepo,
     });
 
     const result = await loop.run(sampleTask, sampleRepo, mockProvider, toolRegistry);
@@ -129,6 +135,7 @@ describe('Agent Runtime — AgentCoreLoop Multi-Step Tool Calling', () => {
       agentStepRepository: mockStepRepo,
       toolCallRepository: mockToolCallRepo,
       eventRepository: mockEventRepo,
+      taskRunRepository: mockTaskRunRepo,
     });
 
     const result = await loop.run(sampleTask, sampleRepo, mockProvider, toolRegistry);
@@ -187,6 +194,8 @@ describe('Agent Runtime — AgentCoreLoop Multi-Step Tool Calling', () => {
     const loop = new AgentCoreLoop({
       agentStepRepository: mockStepRepo,
       toolCallRepository: mockToolCallRepo,
+      eventRepository: mockEventRepo,
+      taskRunRepository: mockTaskRunRepo,
     });
 
     const result = await loop.run(sampleTask, sampleRepo, mockProvider, toolRegistry);
@@ -234,6 +243,8 @@ describe('Agent Runtime — AgentCoreLoop Multi-Step Tool Calling', () => {
     const loop = new AgentCoreLoop({
       agentStepRepository: mockStepRepo,
       toolCallRepository: mockToolCallRepo,
+      eventRepository: mockEventRepo,
+      taskRunRepository: mockTaskRunRepo,
     });
 
     const result = await loop.run(sampleTask, sampleRepo, mockProvider, toolRegistry);
@@ -250,7 +261,6 @@ describe('Agent Runtime — AgentCoreLoop Multi-Step Tool Calling', () => {
   });
 
   it('terminates safely when maxSteps limit is reached', async () => {
-    // Model continuously calls tool
     toolRegistry.register({
       name: 'ping',
       description: 'Ping',
@@ -260,7 +270,6 @@ describe('Agent Runtime — AgentCoreLoop Multi-Step Tool Calling', () => {
     });
 
     const mockProvider = new MockLLMProvider();
-    // Continuous tool calls
     mockProvider.setMockResponses(
       Array.from({ length: 10 }, () => ({
         content: 'Ping again',
@@ -272,6 +281,8 @@ describe('Agent Runtime — AgentCoreLoop Multi-Step Tool Calling', () => {
       maxSteps: 3,
       agentStepRepository: mockStepRepo,
       toolCallRepository: mockToolCallRepo,
+      eventRepository: mockEventRepo,
+      taskRunRepository: mockTaskRunRepo,
     });
 
     const result = await loop.run(sampleTask, sampleRepo, mockProvider, toolRegistry);
@@ -291,6 +302,8 @@ describe('Agent Runtime — AgentCoreLoop Multi-Step Tool Calling', () => {
       signal: controller.signal,
       agentStepRepository: mockStepRepo,
       toolCallRepository: mockToolCallRepo,
+      eventRepository: mockEventRepo,
+      taskRunRepository: mockTaskRunRepo,
     });
 
     const result = await loop.run(sampleTask, sampleRepo, mockProvider, toolRegistry);
@@ -298,5 +311,68 @@ describe('Agent Runtime — AgentCoreLoop Multi-Step Tool Calling', () => {
     expect(result.success).toBe(false);
     expect(result.aborted).toBe(true);
     expect(result.error).toContain('cancelled by user');
+  });
+
+  it('detects and terminates infinite failure loops when model repeats same failing tool call', async () => {
+    toolRegistry.register({
+      name: 'broken_tool',
+      description: 'A tool that fails',
+      permissionClass: 'READ_ONLY',
+      inputSchema: z.object({ path: z.string() }),
+      execute: vi.fn().mockRejectedValue(new Error('Persistent disk read failure')),
+    });
+
+    const mockProvider = new MockLLMProvider();
+    // Model repeats the failing tool call
+    mockProvider.setMockResponses(
+      Array.from({ length: 10 }, () => ({
+        content: 'Retrying broken tool',
+        toolCalls: [{ id: 'call_broken', name: 'broken_tool', arguments: { path: '/invalid' } }],
+      })),
+    );
+
+    const loop = new AgentCoreLoop({
+      maxSteps: 10,
+      agentStepRepository: mockStepRepo,
+      toolCallRepository: mockToolCallRepo,
+      eventRepository: mockEventRepo,
+      taskRunRepository: mockTaskRunRepo,
+    });
+
+    const result = await loop.run(sampleTask, sampleRepo, mockProvider, toolRegistry);
+
+    expect(result.success).toBe(false);
+    expect(result.blocked).toBe(true);
+    expect(result.error).toContain('Infinite failure loop detected');
+  });
+
+  it('records failure event and diagnostics when unrecoverable LLM error occurs', async () => {
+    const failingProvider = {
+      generate: vi.fn().mockRejectedValue(new Error('Permanent non-retryable syntax error')),
+      stream: vi.fn(),
+      supports: vi.fn().mockReturnValue(true),
+      getCapabilities: vi.fn().mockReturnValue({ streaming: false, toolCalling: true, vision: false }),
+    } as any;
+
+    const loop = new AgentCoreLoop({
+      agentStepRepository: mockStepRepo,
+      toolCallRepository: mockToolCallRepo,
+      eventRepository: mockEventRepo,
+      taskRunRepository: mockTaskRunRepo,
+      retryOptions: { maxRetries: 0 },
+    });
+
+    const result = await loop.run(sampleTask, sampleRepo, failingProvider, toolRegistry);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Permanent non-retryable syntax error');
+    expect(mockEventRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 'task_001',
+        runId: 'run_001',
+        type: 'AGENT_EXECUTION_FAILED',
+        level: 'error',
+      }),
+    );
   });
 });

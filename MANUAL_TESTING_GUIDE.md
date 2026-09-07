@@ -933,9 +933,68 @@ pnpm test
 ```
 Verify that all 21 test suites pass across all 12 monorepo packages.
 
+---
 
+### Task 6.3: Agent Failure Recovery, Transient Retry & Loop Protection
 
+#### 📂 Key Files to Study:
+- [`apps/worker/src/agent/failure-recovery.ts`](./apps/worker/src/agent/failure-recovery.ts) — Exponential backoff retry engine (`retryWithBackoff`) with jitter/delays and `LoopDetector` guarding against repetitive failing tool invocations.
+- [`apps/worker/src/agent/agent-loop.ts`](./apps/worker/src/agent/agent-loop.ts) — Integration of failure recovery into the agent core loop, generating self-correction feedback prompts and persisting failure diagnostic events (`AGENT_EXECUTION_FAILED`).
+- [`apps/worker/src/agent/failure-recovery.test.ts`](./apps/worker/src/agent/failure-recovery.test.ts) — Unit test suite verifying backoff math, retryable vs non-retryable error discernment, and loop threshold trips.
 
+#### 🔄 Failure Recovery & Loop Guard Flow:
+```mermaid
+flowchart TD
+    subgraph Execution["Agent Core Loop Step"]
+        Call["provider.generate()"]
+        ToolExec["Execute Tool Call"]
+    end
+
+    subgraph Failure_Detection["Failure Recovery Engine"]
+        RetryCheck{"Is Transient Error?\n(429 / 503 / Timeout / Network)"}
+        Backoff["Exponential Backoff\n(delay: 500ms * 2^attempt)"]
+        LoopCheck{"LoopDetector\n(Identical tool + args failed N times?)"}
+        WarnSys["Inject System Warning Prompt\n(Count == 3)"]
+        BlockTask["Block Task with Audit Diagnostic\n(Count >= 5)"]
+        SelfCorrect["Feed Error JSON + Hint to LLM\n(Self-Correction Prompt)"]
+    end
+
+    Call -->|Throws Error| RetryCheck
+    RetryCheck -->|Yes & Attempts < 3| Backoff --> Call
+    RetryCheck -->|No or Attempts Exhausted| BlockTask
+    ToolExec -->|Fails / Throws| LoopCheck
+    LoopCheck -->|Count < 3| SelfCorrect --> Call
+    LoopCheck -->|Count == 3| WarnSys --> Call
+    LoopCheck -->|Count >= 5| BlockTask
+```
+
+#### 💡 Core Concepts & Why It's Built This Way:
+- **Resilient Transient Error Handling**: Network drops, API rate limits (`429`), and temporary upstream downtime (`503`) are common in LLM operations. Rather than crashing long-running task runs, `retryWithBackoff` transparently retries up to 3 times with exponential backoff before reporting a hard failure.
+- **Model Self-Correction via Structured Error Feedback**: When an LLM passes invalid tool arguments or when a tool returns a non-zero exit code, BuildPilot returns a structured JSON payload containing the exact error and an actionable hint (e.g. schema requirement or available alternatives). This enables frontier models to self-correct in the next step.
+- **Infinite Failure Loop Guard (`LoopDetector`)**: Without guards, autonomous models may get stuck in repetitive failure loops (calling the same broken command 20 times). `LoopDetector` fingerprints `tool::JSON.stringify(args)`. At 3 failures it issues a high-priority system warning, and at 5 consecutive identical failures it immediately aborts the loop to prevent token wastage.
+- **Detailed Failure Audit Diagnostics**: Whenever an agent run terminates due to step limits, timeouts, or unrecoverable provider errors, structured failure events (`AGENT_EXECUTION_FAILED`) are recorded in MongoDB with error message, step count, and execution duration for transparent debugging on the dashboard.
+
+#### 🧪 How to Manually Run & Test:
+
+##### Step 1: Run the Failure Recovery & Agent Loop Unit Tests
+```bash
+pnpm --filter @buildpilot/worker test
+```
+**Expected Output:**
+```text
+ ✓ src/agent/failure-recovery.test.ts (8 tests)
+ ✓ src/agent/agent-loop.test.ts (8 tests)
+ ✓ src/agent/context-builder.test.ts (12 tests)
+ ✓ src/worker.test.ts (7 tests)
+ Test Files  4 passed (4)
+      Tests  35 passed (35)
+```
+
+##### Step 2: Run Full Monorepo Test Suite
+```bash
+pnpm test
+```
+Verify that all 21 test suites pass cleanly across all 12 monorepo packages.
 
 
 

@@ -226,12 +226,12 @@ Next TODO: <next unchecked task>
   - [x] Support cancellation signals during agent execution.
   - **Acceptance Criteria:** Scripted agent executes a multi-step tool-calling task with full history recorded in `agent_steps` and `tool_calls`. (PASSED ✅)
 
-- [ ] **Task 6.3 — Agent failure recovery**
-  - [ ] Implement retry logic for transient LLM errors (exponential backoff).
-  - [ ] Implement error feedback to LLM when tool execution fails (allowing model self-correction).
-  - [ ] Guard against infinite identical failure loops.
-  - [ ] Persist detailed failure diagnostics and mark task run as `FAILED` or `BLOCKED`.
-  - **Acceptance Criteria:** Transient errors are recovered cleanly; persistent failures terminate safely with audit records.
+- [x] **Task 6.3 — Agent failure recovery**
+  - [x] Implement retry logic for transient LLM errors (exponential backoff).
+  - [x] Implement error feedback to LLM when tool execution fails (allowing model self-correction).
+  - [x] Guard against infinite identical failure loops.
+  - [x] Persist detailed failure diagnostics and mark task run as `FAILED` or `BLOCKED`.
+  - **Acceptance Criteria:** Transient errors are recovered cleanly; persistent failures terminate safely with audit records. (PASSED ✅)
 
 ---
 
