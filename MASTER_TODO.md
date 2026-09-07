@@ -571,11 +571,11 @@ Next TODO: <next unchecked task>
   - [x] Secure environment variable configuration.
   - **Acceptance Criteria:** Sensitive credentials are encrypted and never leaked in logs. (PASSED ✅)
 
-- [ ] **Task 21.3 — VPS deployment & Caddy reverse proxy**
-  - [ ] Production `docker-compose.prod.yml`.
-  - [ ] Configure Caddy with automatic TLS / HTTPS.
-  - [ ] Harden Linux server (firewall, SSH keys only, non-root containers).
-  - **Acceptance Criteria:** Full stack runs in production on a VPS behind HTTPS.
+- [x] **Task 21.3 — VPS deployment & Caddy reverse proxy**
+  - [x] Production `docker-compose.prod.yml`.
+  - [x] Configure Caddy with automatic TLS / HTTPS.
+  - [x] Harden Linux server (firewall, SSH keys only, non-root containers).
+  - **Acceptance Criteria:** Full stack runs in production on a VPS behind HTTPS. (PASSED ✅)
 
 - [ ] **Task 21.4 — Database backup strategy**
   - [ ] Implement automated MongoDB backup cron job.
