@@ -491,12 +491,12 @@ Next TODO: <next unchecked task>
   - [x] Support Claude models with tool calling.
   - **Acceptance Criteria:** Agent runtime executes tasks using Anthropic provider. (PASSED ✅)
 
-- [ ] **Task 17.4 — Provider settings & model selection**
-  - [ ] Provider configuration UI in dashboard (`/settings/providers`).
-  - [ ] Store API keys encrypted or via server env.
-  - [ ] Connection test button for each provider.
-  - [ ] Task-level provider/model override capability.
-  - **Acceptance Criteria:** User can switch default provider and test connections from UI.
+- [x] **Task 17.4 — Provider settings & model selection**
+  - [x] Provider configuration UI in dashboard (`/settings/providers`).
+  - [x] Store API keys encrypted or via server env.
+  - [x] Connection test button for each provider.
+  - [x] Task-level provider/model override capability.
+  - **Acceptance Criteria:** User can switch default provider and test connections from UI. (PASSED ✅)
 
 ---
 
