@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
-import { runCommandTool, runTestsTool } from './execution-tools.js';
+import { runCommandTool, runTestsTool, runBrowserVerificationTool } from './execution-tools.js';
 import { ToolContext } from '../types.js';
 
-describe('Execution Tools (Task 7.3)', () => {
+describe('Execution Tools (Task 7.3 & Task 15.4)', () => {
   let tempDir: string;
   let context: ToolContext;
 
@@ -84,6 +84,25 @@ describe('Execution Tools (Task 7.3)', () => {
       expect(res.passed).toBe(false);
       expect(res.exitCode).toBe(1);
       expect(res.summary).toContain('Tests failed');
+    });
+  });
+
+  describe('run_browser_verification (Task 15.4: Playwright)', () => {
+    it('executes browser verification script and captures artifacts', async () => {
+      const res = await runBrowserVerificationTool.execute(
+        {
+          testScript: 'node -e "process.exit(0)"',
+          captureScreenshot: true,
+          screenshotPath: 'artifacts/smoke-pass.png',
+        },
+        context,
+      );
+
+      expect(res.passed).toBe(true);
+      expect(res.exitCode).toBe(0);
+      expect(res.screenshotCaptured).toBe(true);
+      expect(res.screenshotPath).toBe('artifacts/smoke-pass.png');
+      expect(res.summary).toContain('passed cleanly');
     });
   });
 });

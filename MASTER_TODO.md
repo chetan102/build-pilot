@@ -428,13 +428,13 @@ Next TODO: <next unchecked task>
 
 ## Phase 15 — Testing & Verification
 
-- [ ] **Task 15.1 — Unit tests**
-  - [ ] Domain state machine & transition tests.
-  - [ ] LLM provider adapter & error normalization tests.
-  - [ ] Tool registry & schema validation tests.
-  - [ ] Git worktree helper tests.
-  - [ ] Queue payload validation tests.
-  - **Acceptance Criteria:** `pnpm test` runs all unit tests with 100% pass rate.
+- [x] **Task 15.1 — Unit tests**
+  - [x] Domain state machine & transition tests.
+  - [x] LLM provider adapter & error normalization tests.
+  - [x] Tool registry & schema validation tests.
+  - [x] Git worktree helper tests.
+  - [x] Queue payload validation tests.
+  - **Acceptance Criteria:** `pnpm test` runs all unit tests with 100% pass rate. (PASSED ✅)
 
 - [ ] **Task 15.2 — Integration tests**
   - [ ] Express API ↔ MongoDB integration tests.

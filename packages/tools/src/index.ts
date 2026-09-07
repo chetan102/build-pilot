@@ -11,7 +11,7 @@ import { toolRegistry } from './registry.js';
 import { readFileTool, writeFileTool } from './repository/file-tools.js';
 import { listFilesTool, searchCodeTool } from './repository/search-tools.js';
 import { gitStatusTool, gitDiffTool } from './repository/git-tools.js';
-import { runCommandTool, runTestsTool, createPullRequestTool } from './execution/execution-tools.js';
+import { runCommandTool, runTestsTool, createPullRequestTool, runBrowserVerificationTool } from './execution/execution-tools.js';
 
 export function registerDefaultTools(registry = toolRegistry) {
   registry.register(readFileTool);
@@ -23,6 +23,7 @@ export function registerDefaultTools(registry = toolRegistry) {
   registry.register(runCommandTool);
   registry.register(runTestsTool);
   registry.register(createPullRequestTool);
+  registry.register(runBrowserVerificationTool);
   return registry;
 }
 
