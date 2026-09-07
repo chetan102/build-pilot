@@ -533,11 +533,11 @@ Next TODO: <next unchecked task>
   - [x] Trace API requests, BullMQ jobs, LLM calls, tool executions, and sandbox runs.
   - **Acceptance Criteria:** Traces provide end-to-end visualization of task execution. (PASSED ✅)
 
-- [ ] **Task 19.3 — Operational metrics**
-  - [ ] Track task duration, success rate, retry rate, tool latency, token usage, and cost estimates.
-  - [ ] Expose metrics endpoint (`/metrics` for Prometheus).
-  - [ ] Display aggregate metrics on dashboard.
-  - **Acceptance Criteria:** Dashboard displays operational metrics and estimated costs.
+- [x] **Task 19.3 — Operational metrics**
+  - [x] Track task duration, success rate, retry rate, tool latency, token usage, and cost estimates.
+  - [x] Expose metrics endpoint (`/metrics` for Prometheus).
+  - [x] Display aggregate metrics on dashboard.
+  - **Acceptance Criteria:** Dashboard displays operational metrics and estimated costs. (PASSED ✅)
 
 ---
 
