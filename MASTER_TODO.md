@@ -382,13 +382,13 @@ Next TODO: <next unchecked task>
   - [x] Stream stdout/stderr from container to worker logs and database.
   - **Acceptance Criteria:** Commands execute inside disposable containers with resource limits enforced. (PASSED ✅)
 
-- [ ] **Task 13.2 — Security restrictions & policies**
-  - [ ] Disable privileged mode and root execution.
-  - [ ] Deny access to host Docker socket and filesystem.
-  - [ ] Restrict network access (offline execution by default, whitelist for package installs).
-  - [ ] Enforce environment variable allowlist.
-  - [ ] Add automatic container cleanup on completion, error, or crash.
-  - **Acceptance Criteria:** Host system is completely protected from untrusted code execution.
+- [x] **Task 13.2 — Security restrictions & policies**
+  - [x] Disable privileged mode and root execution.
+  - [x] Deny access to host Docker socket and filesystem.
+  - [x] Restrict network access (offline execution by default, whitelist for package installs).
+  - [x] Enforce environment variable allowlist.
+  - [x] Add automatic container cleanup on completion, error, or crash.
+  - **Acceptance Criteria:** Host system is completely protected from untrusted code execution. (PASSED ✅)
 
 - [ ] **Task 13.3 — Tool sandbox routing**
   - [ ] Route `run_command` and `run_tests` through Docker sandbox.
