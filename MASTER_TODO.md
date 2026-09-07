@@ -360,10 +360,10 @@ Next TODO: <next unchecked task>
   - [x] Implement worker heartbeat and lease renewal to detect stalled workers.
   - **Acceptance Criteria:** Task state is always consistent and auditable across restarts. (PASSED ✅)
 
-- [ ] **Task 12.2 — Crash recovery & resume**
-  - [ ] Handle worker crashes during planning, execution, and testing.
-  - [ ] Implement safe resume from last checkpoint without duplicate PRs or branch corruption.
-  - **Acceptance Criteria:** Killing and restarting worker resumes or recovers task safely.
+- [x] **Task 12.2 — Crash recovery & resume**
+  - [x] Handle worker crashes during planning, execution, and testing.
+  - [x] Implement safe resume from last checkpoint without duplicate PRs or branch corruption.
+  - **Acceptance Criteria:** Killing and restarting worker resumes or recovers task safely. (PASSED ✅)
 
 - [ ] **Task 12.3 — Idempotency guards**
   - [ ] Guard against duplicate webhook deliveries.
