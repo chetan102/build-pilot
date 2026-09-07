@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { getTaskEventsStreamUrl } from './api-client.js';
+import { getTaskEventsStreamUrl } from './api-client';
+
 
 export interface TaskEvent {
   _id?: string;
