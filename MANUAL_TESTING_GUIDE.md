@@ -1073,6 +1073,54 @@ pnpm test
 ```
 Verify that all 21 test suites pass cleanly across all 12 monorepo packages.
 
+---
+
+### Task 7.2: Repository Tools (`list_files`, `search_code`, `read_file`, `write_file`, `git_status`, `git_diff`)
+
+#### 📂 Key Files to Study:
+- [`packages/tools/src/repository/path-utils.ts`](./packages/tools/src/repository/path-utils.ts) — Workspace sandbox boundary resolution (`resolveSafePath`) guarding against directory traversal attacks.
+- [`packages/tools/src/repository/file-tools.ts`](./packages/tools/src/repository/file-tools.ts) — `read_file` (with line slicing & truncation) and `write_file` (with auto directory creation).
+- [`packages/tools/src/repository/search-tools.ts`](./packages/tools/src/repository/search-tools.ts) — `list_files` (recursive tree with ignore rules) and `search_code` (regex & text grep matching).
+- [`packages/tools/src/repository/git-tools.ts`](./packages/tools/src/repository/git-tools.ts) — `git_status` (porcelain parser) and `git_diff` (patch generator).
+- [`packages/tools/src/repository/repository.test.ts`](./packages/tools/src/repository/repository.test.ts) — Unit test suite verifying file manipulation, regex search, path traversal rejection, and git operations.
+
+#### 🔄 Repository Tools Capabilities Matrix:
+| Tool Name | Permission Class | Key Parameters | Return Payload |
+|---|---|---|---|
+| `list_files` | `READ_ONLY` | `path`, `maxDepth`, `limit`, `includeHidden` | `{ count, entries: [{ path, type, sizeBytes }] }` |
+| `read_file` | `READ_ONLY` | `path`, `startLine`, `endLine`, `maxLines` | `{ content, totalLines, startLine, endLine, truncated }` |
+| `write_file` | `SAFE_WRITE` | `path`, `content`, `createDirectories` | `{ path, bytesWritten, created, updated }` |
+| `search_code` | `READ_ONLY` | `query`, `path`, `isRegex`, `caseSensitive`, `maxResults` | `{ query, count, matches: [{ file, lineNumber, lineContent }] }` |
+| `git_status` | `READ_ONLY` | `path` | `{ clean, totalChanged, files: [{ path, status, staged, unstaged }] }` |
+| `git_diff` | `READ_ONLY` | `staged`, `path`, `maxLines` | `{ diff, totalLines, truncated }` |
+
+#### 💡 Core Concepts & Why It's Built This Way:
+- **Workspace Boundary Containment**: To prevent malicious LLM prompts or security exploits from accessing `/etc`, `~/.ssh`, or parent directories, `resolveSafePath` resolves absolute paths and enforces that the target is strictly inside `context.workspaceDir`.
+- **Intelligent Default Ignore List**: `list_files` and `search_code` automatically filter out `.git`, `node_modules`, `dist`, `.next`, and binary files (`.png`, `.pdf`, `.zip`), preventing context pollution and wasted token budget.
+- **Line Slicing & Truncation**: `read_file` allows agents to read specific line ranges (e.g. lines 50 to 120) instead of loading a 10,000-line file into memory, keeping LLM prompts lean and fast.
+
+#### 🧪 How to Manually Run & Test:
+
+##### Step 1: Run Repository Tools Unit Tests
+```bash
+pnpm --filter @buildpilot/tools test
+```
+**Expected Output:**
+```text
+ ✓ src/registry.test.ts (7 tests)
+ ✓ src/index.test.ts (1 test)
+ ✓ src/repository/repository.test.ts (5 tests)
+ Test Files  3 passed (3)
+      Tests  13 passed (13)
+```
+
+##### Step 2: Run Full Monorepo Test Suite
+```bash
+pnpm test
+```
+Verify that all 21 test suites pass cleanly across all 12 monorepo packages.
+
+
 
 
 

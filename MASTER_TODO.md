@@ -244,14 +244,14 @@ Next TODO: <next unchecked task>
   - [x] Define permission classes: `READ_ONLY`, `SAFE_WRITE`, `EXTERNAL_WRITE`, `HIGH_RISK`.
   - **Acceptance Criteria:** Registry validates tool inputs via Zod and enforces permission classes. (PASSED ✅)
 
-- [ ] **Task 7.2 — Repository tools**
-  - [ ] Implement `list_files` tool (with path filtering, glob patterns, max depth).
-  - [ ] Implement `search_code` tool (regex / ripgrep search within workspace).
-  - [ ] Implement `read_file` tool (with line range slicing and truncation safeguards).
-  - [ ] Implement `write_file` tool (create or replace file contents within workspace).
-  - [ ] Implement `git_status` tool.
-  - [ ] Implement `git_diff` tool.
-  - **Acceptance Criteria:** Agent can inspect repository structure, search contents, read files, and write modifications.
+- [x] **Task 7.2 — Repository tools**
+  - [x] Implement `list_files` tool (with path filtering, glob patterns, max depth).
+  - [x] Implement `search_code` tool (regex / ripgrep search within workspace).
+  - [x] Implement `read_file` tool (with line range slicing and truncation safeguards).
+  - [x] Implement `write_file` tool (create or replace file contents within workspace).
+  - [x] Implement `git_status` tool.
+  - [x] Implement `git_diff` tool.
+  - **Acceptance Criteria:** Agent can inspect repository structure, search contents, read files, and write modifications. (PASSED ✅)
 
 - [ ] **Task 7.3 — Execution tools**
   - [ ] Implement `run_command` tool (executes shell command in controlled workspace).
