@@ -31,3 +31,11 @@ export const CancelTaskSchema = z.object({
 
 export type CancelTaskInput = z.infer<typeof CancelTaskSchema>;
 
+export const ApprovalDecisionSchema = z.object({
+  decision: z.enum(['APPROVED', 'REJECTED']),
+  reviewedBy: z.string().min(1, 'Reviewer identity is required'),
+  rejectionReason: z.string().optional(),
+});
+
+export type ApprovalDecisionInput = z.infer<typeof ApprovalDecisionSchema>;
+

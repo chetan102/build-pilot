@@ -1,6 +1,7 @@
 import {
   taskRepository,
   eventRepository,
+  approvalRepository,
   ITask,
   ListTasksFilter,
   TaskPaginationOptions,
@@ -145,6 +146,55 @@ export class TaskService {
   subscribeEvents(taskId: string, handler: (event: any) => void): () => void {
     return eventRepository.subscribeTask(taskId, handler);
   }
+
+  async listApprovals(taskId: string) {
+    return approvalRepository.findByTaskId(taskId);
+  }
+
+  async submitApprovalDecision(
+    taskId: string,
+    approvalId: string,
+    decision: 'APPROVED' | 'REJECTED',
+    reviewedBy: string,
+    rejectionReason?: string,
+  ) {
+    const task = await taskRepository.findById(taskId);
+    if (!task) {
+      throw new EntityNotFoundError('Task', taskId);
+    }
+
+    const updatedApproval =
+      decision === 'APPROVED'
+        ? await approvalRepository.approve(approvalId, reviewedBy)
+        : await approvalRepository.reject(approvalId, reviewedBy, rejectionReason);
+
+    if (!updatedApproval) {
+      throw new EntityNotFoundError('Approval', approvalId);
+    }
+
+    // Update task state if task was waiting for approval
+    if (task.status === TaskStatus.AWAITING_APPROVAL) {
+      const nextStatus = decision === 'APPROVED' ? TaskStatus.PR_READY : TaskStatus.CANCELLED;
+      await taskRepository.updateStatus(taskId, nextStatus);
+
+      await eventRepository.create({
+        taskId,
+        type: decision === 'APPROVED' ? 'APPROVAL_GRANTED' : 'APPROVAL_REJECTED',
+        payload: {
+          approvalId,
+          action: updatedApproval.action,
+          reviewedBy,
+          decision,
+          rejectionReason,
+          newStatus: nextStatus,
+        },
+        level: decision === 'APPROVED' ? 'info' : 'warn',
+      });
+    }
+
+    return updatedApproval;
+  }
 }
 
 export const taskService = new TaskService();
+

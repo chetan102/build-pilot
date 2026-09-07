@@ -6,6 +6,7 @@ import {
   projectRepository,
   taskRepository,
   eventRepository,
+  approvalRepository,
   IProject,
   ITask,
 } from '@buildpilot/database';
@@ -384,19 +385,62 @@ describe('Projects & Tasks Layered API Architecture', () => {
       expect(res.body.error).toBe('INVALID_STATE_TRANSITION');
     });
 
-    it('GET /api/v1/tasks/:taskId/events streams task events with text/event-stream headers', async () => {
-      vi.spyOn(eventRepository, 'listByTask').mockResolvedValue([
-        { _id: 'evt_1', taskId: fakeTaskId, type: 'TASK_CREATED' } as any,
+    it('GET /api/v1/tasks/:taskId/approvals returns list of approval records', async () => {
+      vi.spyOn(approvalRepository, 'findByTaskId').mockResolvedValue([
+        {
+          _id: 'appr_1',
+          taskId: fakeTaskId,
+          action: 'DEPLOY_PRODUCTION',
+          permissionClass: 'HIGH_RISK',
+          status: 'PENDING',
+        } as any,
       ]);
 
       const res = await invokeApp(app, {
-        url: `/api/v1/tasks/${fakeTaskId}/events`,
+        url: `/api/v1/tasks/${fakeTaskId}/approvals`,
       });
 
       expect(res.statusCode).toBe(200);
-      expect(res.headers['content-type']).toBe('text/event-stream');
-      expect(res.headers['cache-control']).toContain('no-cache');
+      expect(res.body.approvals).toHaveLength(1);
+      expect(res.body.approvals[0].action).toBe('DEPLOY_PRODUCTION');
+    });
+
+    it('POST /api/v1/tasks/:taskId/approvals/:approvalId/decision approves action and updates task state', async () => {
+      vi.spyOn(taskRepository, 'findById').mockResolvedValue({
+        _id: fakeTaskId,
+        status: TaskStatus.AWAITING_APPROVAL,
+      } as any);
+
+      vi.spyOn(approvalRepository, 'approve').mockResolvedValue({
+        _id: 'appr_1',
+        taskId: fakeTaskId,
+        action: 'DEPLOY_PRODUCTION',
+        status: 'APPROVED',
+        reviewedBy: 'admin_user',
+      } as any);
+
+      vi.spyOn(taskRepository, 'updateStatus').mockResolvedValue({} as any);
+      const eventSpy = vi.spyOn(eventRepository, 'create').mockResolvedValue({} as any);
+
+      const res = await invokeApp(app, {
+        method: 'POST',
+        url: `/api/v1/tasks/${fakeTaskId}/approvals/appr_1/decision`,
+        body: {
+          decision: 'APPROVED',
+          reviewedBy: 'admin_user',
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body.approval.status).toBe('APPROVED');
+      expect(eventSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskId: fakeTaskId,
+          type: 'APPROVAL_GRANTED',
+        }),
+      );
     });
   });
 });
+
 

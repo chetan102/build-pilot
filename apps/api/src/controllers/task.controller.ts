@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { taskService } from '../services/task.service.js';
-import { ListTasksQuerySchema, CancelTaskSchema } from '../schemas/task.schema.js';
+import { ListTasksQuerySchema, CancelTaskSchema, ApprovalDecisionSchema } from '../schemas/task.schema.js';
 
 export class TaskController {
   async listTasks(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -61,6 +61,43 @@ export class TaskController {
 
       res.status(200).json({
         task,
+        correlationId: req.correlationId,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async listApprovals(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const taskId = String(req.params.taskId || '');
+      const approvals = await taskService.listApprovals(taskId);
+
+      res.status(200).json({
+        approvals,
+        correlationId: req.correlationId,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async submitApprovalDecision(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const taskId = String(req.params.taskId || '');
+      const approvalId = String(req.params.approvalId || '');
+      const input = ApprovalDecisionSchema.parse(req.body);
+
+      const approval = await taskService.submitApprovalDecision(
+        taskId,
+        approvalId,
+        input.decision,
+        input.reviewedBy,
+        input.rejectionReason,
+      );
+
+      res.status(200).json({
+        approval,
         correlationId: req.correlationId,
       });
     } catch (err) {

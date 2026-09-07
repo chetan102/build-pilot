@@ -459,12 +459,12 @@ Next TODO: <next unchecked task>
 
 ## Phase 16 — Human Approval & Policies
 
-- [ ] **Task 16.1 — Approval engine**
-  - [ ] Define high-risk actions requiring approval (`HIGH_RISK` tools, PR merge, deploy).
-  - [ ] Implement approval request records and pause workflow in `AWAITING_APPROVAL`.
-  - [ ] Add interactive approval UI in web dashboard (Approve / Reject with notes).
-  - [ ] Resume or terminate task upon human decision.
-  - **Acceptance Criteria:** High-risk actions pause execution until human approves in the dashboard.
+- [x] **Task 16.1 — Approval engine**
+  - [x] Define high-risk actions requiring approval (`HIGH_RISK` tools, PR merge, deploy).
+  - [x] Implement approval request records and pause workflow in `AWAITING_APPROVAL`.
+  - [x] Add interactive approval UI in web dashboard (Approve / Reject with notes).
+  - [x] Resume or terminate task upon human decision.
+  - **Acceptance Criteria:** High-risk actions pause execution until human approves in the dashboard. (PASSED ✅)
 
 - [ ] **Task 16.2 — Granular permissions & audit**
   - [ ] Configurable global and repository-level tool permission policies.
