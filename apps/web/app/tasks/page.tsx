@@ -6,6 +6,10 @@ import {
   Kanban,
   Table as TableIcon,
   Search,
+  RefreshCw,
+  AlertCircle,
+  Clock,
+  ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +23,7 @@ import {
   TableHead,
   TableCell,
 } from '@/components/ui/table';
+import { fetchTasks, TaskSummary } from '@/lib/api-client';
 import { MOCK_TASKS } from '@/lib/mock-data';
 import { formatDuration } from '@/lib/utils';
 
@@ -26,12 +31,85 @@ export default function TasksPage() {
   const [viewMode, setViewMode] = React.useState<'kanban' | 'table'>('kanban');
   const [searchQuery, setSearchQuery] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState<string>('ALL');
+  const [tasks, setTasks] = React.useState<TaskSummary[]>([]);
+  const [loading, setLoading] = React.useState<boolean>(true);
+  const [isUsingFallback, setIsUsingFallback] = React.useState<boolean>(false);
+  const [page, setPage] = React.useState<number>(1);
+  const [totalPages, setTotalPages] = React.useState<number>(1);
 
-  const filteredTasks = MOCK_TASKS.filter((task) => {
+  const loadTasks = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetchTasks({
+        search: searchQuery || undefined,
+        status: statusFilter !== 'ALL' ? statusFilter : undefined,
+        page,
+        limit: 50,
+      });
+
+      if (res.tasks && res.tasks.length > 0) {
+        setTasks(res.tasks);
+        setTotalPages(res.totalPages || 1);
+        setIsUsingFallback(false);
+      } else {
+        // If live DB is empty, use mock fallback so UI demonstrates all states
+        setTasks(
+          MOCK_TASKS.map((m) => ({
+            _id: m.id,
+            id: m.id,
+            projectId: 'proj_mock',
+            repositoryId: m.repository,
+            issueNumber: m.issueNumber,
+            title: m.title,
+            status: m.status,
+            branch: m.branch,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            durationMs: m.durationMs,
+            model: m.model,
+            provider: m.provider,
+            prUrl: m.prUrl,
+            prNumber: m.prNumber,
+          })),
+        );
+        setIsUsingFallback(true);
+      }
+    } catch {
+      // Offline fallback
+      setTasks(
+        MOCK_TASKS.map((m) => ({
+          _id: m.id,
+          id: m.id,
+          projectId: 'proj_mock',
+          repositoryId: m.repository,
+          issueNumber: m.issueNumber,
+          title: m.title,
+          status: m.status,
+          branch: m.branch,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          durationMs: m.durationMs,
+          model: m.model,
+          provider: m.provider,
+          prUrl: m.prUrl,
+          prNumber: m.prNumber,
+        })),
+      );
+      setIsUsingFallback(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [searchQuery, statusFilter, page]);
+
+  React.useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
+
+  const filteredTasks = tasks.filter((task) => {
     const matchesSearch =
       task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.repository.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.issueNumber.toString().includes(searchQuery);
+      task.repositoryId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      task.issueNumber?.toString().includes(searchQuery);
 
     const matchesStatus = statusFilter === 'ALL' || task.status === statusFilter;
     return matchesSearch && matchesStatus;
@@ -51,14 +129,32 @@ export default function TasksPage() {
       {/* Top Controls Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Autonomous Task Board</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Autonomous Task Board</h1>
+            {isUsingFallback && (
+              <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-300 bg-amber-50">
+                Demo Fixture Data
+              </Badge>
+            )}
+          </div>
           <p className="text-xs text-slate-500">
             Real-time pipeline tracking GitHub issues through execution, verification, and PR delivery
           </p>
         </div>
 
-        {/* View Toggle */}
+        {/* View Toggle & Refresh */}
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => loadTasks()}
+            disabled={loading}
+            className="h-8 text-xs gap-1.5"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin text-blue-500' : 'text-slate-500'}`} />
+            <span>Refresh</span>
+          </Button>
+
           <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
             <button
               onClick={() => setViewMode('kanban')}
@@ -99,7 +195,7 @@ export default function TasksPage() {
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
-          {['ALL', 'QUEUED', 'PLANNING', 'DEVELOPMENT', 'TESTING', 'COMPLETED'].map((status) => (
+          {['ALL', 'QUEUED', 'PLANNING', 'DEVELOPMENT', 'TESTING', 'AWAITING_APPROVAL', 'COMPLETED'].map((status) => (
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
@@ -109,7 +205,7 @@ export default function TasksPage() {
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              {status === 'ALL' ? 'All Tasks' : status}
+              {status === 'ALL' ? 'All Tasks' : status.replace(/_/g, ' ')}
             </button>
           ))}
         </div>
@@ -137,33 +233,36 @@ export default function TasksPage() {
 
                 {/* Cards */}
                 <div className="space-y-3 flex-1">
-                  {tasksInColumn.map((task) => (
-                    <Link key={task.id} href={`/tasks/${task.id}`}>
-                      <Card className="hover:border-blue-300 hover:shadow-md transition-all cursor-pointer bg-white border-slate-200">
-                        <CardContent className="p-3.5 space-y-2.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-mono font-semibold text-slate-400">
-                              #{task.issueNumber}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-medium truncate max-w-[120px]">
-                              {task.repository.split('/')[1]}
-                            </span>
-                          </div>
+                  {tasksInColumn.map((task) => {
+                    const taskId = task._id || task.id;
+                    return (
+                      <Link key={taskId} href={`/tasks/${taskId}`}>
+                        <Card className="hover:border-blue-300 hover:shadow-md transition-all cursor-pointer bg-white border-slate-200">
+                          <CardContent className="p-3.5 space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-mono font-semibold text-slate-400">
+                                #{task.issueNumber || 1}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-medium truncate max-w-[120px]">
+                                {task.repositoryId?.split('/')[1] || task.repositoryId || 'repo'}
+                              </span>
+                            </div>
 
-                          <h3 className="font-semibold text-xs text-slate-900 leading-snug line-clamp-2 hover:text-blue-600 transition-colors">
-                            {task.title}
-                          </h3>
+                            <h3 className="font-semibold text-xs text-slate-900 leading-snug line-clamp-2 hover:text-blue-600 transition-colors">
+                              {task.title}
+                            </h3>
 
-                          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                            <span className="truncate max-w-[90px]">{task.model.split('/')[1] || task.model}</span>
-                            <span className="font-medium text-slate-600">
-                              {task.durationMs ? formatDuration(task.durationMs) : '0s'}
-                            </span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </Link>
-                  ))}
+                            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                              <span className="truncate max-w-[90px]">{task.model?.split('/')[1] || task.model || 'claude-3.5-sonnet'}</span>
+                              <span className="font-medium text-slate-600">
+                                {task.durationMs ? formatDuration(task.durationMs) : '0s'}
+                              </span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </Link>
+                    );
+                  })}
 
                   {tasksInColumn.length === 0 && (
                     <div className="h-28 rounded-lg border-2 border-dashed border-slate-200 flex items-center justify-center text-xs text-slate-400">
@@ -190,40 +289,43 @@ export default function TasksPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredTasks.map((task) => (
-                <TableRow key={task.id}>
-                  <TableCell className="font-mono font-bold text-xs text-slate-500">
-                    #{task.issueNumber}
-                  </TableCell>
-                  <TableCell>
-                    <Link
-                      href={`/tasks/${task.id}`}
-                      className="font-semibold text-slate-900 hover:text-blue-600 transition-colors block text-xs"
-                    >
-                      {task.title}
-                    </Link>
-                    <span className="text-[11px] text-slate-400">{task.repository} · {task.branch}</span>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={task.status === 'COMPLETED' ? 'success' : task.status === 'AWAITING_APPROVAL' ? 'warning' : 'default'}>
-                      {task.status.replace(/_/g, ' ')}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs text-slate-600 font-mono">
-                    {task.model}
-                  </TableCell>
-                  <TableCell className="text-xs text-slate-500 font-medium">
-                    {task.durationMs ? formatDuration(task.durationMs) : '0s'}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Link href={`/tasks/${task.id}`}>
-                      <Button variant="outline" size="sm" className="text-xs h-7 px-2">
-                        Inspect
-                      </Button>
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {filteredTasks.map((task) => {
+                const taskId = task._id || task.id;
+                return (
+                  <TableRow key={taskId}>
+                    <TableCell className="font-mono font-bold text-xs text-slate-500">
+                      #{task.issueNumber || 1}
+                    </TableCell>
+                    <TableCell>
+                      <Link
+                        href={`/tasks/${taskId}`}
+                        className="font-semibold text-slate-900 hover:text-blue-600 transition-colors block text-xs"
+                      >
+                        {task.title}
+                      </Link>
+                      <span className="text-[11px] text-slate-400">{task.repositoryId} · {task.branch}</span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={task.status === 'COMPLETED' ? 'success' : task.status === 'AWAITING_APPROVAL' ? 'warning' : 'default'}>
+                        {task.status.replace(/_/g, ' ')}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-slate-600 font-mono">
+                      {task.model || 'anthropic/claude-3.5-sonnet'}
+                    </TableCell>
+                    <TableCell className="text-xs text-slate-500 font-medium">
+                      {task.durationMs ? formatDuration(task.durationMs) : '0s'}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Link href={`/tasks/${taskId}`}>
+                        <Button variant="outline" size="sm" className="text-xs h-7 px-2">
+                          Inspect
+                        </Button>
+                      </Link>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
@@ -231,4 +333,3 @@ export default function TasksPage() {
     </div>
   );
 }
-

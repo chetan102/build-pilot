@@ -137,6 +137,14 @@ export class TaskService {
 
     return updated;
   }
+
+  async listEvents(taskId: string): Promise<any[]> {
+    return eventRepository.listByTask(taskId);
+  }
+
+  subscribeEvents(taskId: string, handler: (event: any) => void): () => void {
+    return eventRepository.subscribeTask(taskId, handler);
+  }
 }
 
 export const taskService = new TaskService();

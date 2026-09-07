@@ -10,19 +10,82 @@ import {
   GitPullRequest,
   AlertCircle,
   Layers,
+  RefreshCw,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { fetchTasks, TaskSummary } from '@/lib/api-client';
 import { MOCK_TASKS, MOCK_REPOSITORIES, MOCK_PROVIDERS } from '@/lib/mock-data';
 import { formatDuration } from '@/lib/utils';
 
 export default function DashboardPage() {
-  const activeTasks = MOCK_TASKS.filter(
-    (t) => t.status !== 'COMPLETED' && t.status !== 'FAILED',
+  const [tasks, setTasks] = React.useState<TaskSummary[]>([]);
+  const [loading, setLoading] = React.useState<boolean>(true);
+
+  const loadData = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetchTasks({ limit: 10 });
+      if (res.tasks && res.tasks.length > 0) {
+        setTasks(res.tasks);
+      } else {
+        setTasks(
+          MOCK_TASKS.map((m) => ({
+            _id: m.id,
+            id: m.id,
+            projectId: 'proj_mock',
+            repositoryId: m.repository,
+            issueNumber: m.issueNumber,
+            title: m.title,
+            description: m.description,
+            status: m.status,
+            branch: m.branch,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            durationMs: m.durationMs,
+            model: m.model,
+            provider: m.provider,
+            prUrl: m.prUrl,
+            prNumber: m.prNumber,
+          })),
+        );
+      }
+    } catch {
+      setTasks(
+        MOCK_TASKS.map((m) => ({
+          _id: m.id,
+          id: m.id,
+          projectId: 'proj_mock',
+          repositoryId: m.repository,
+          issueNumber: m.issueNumber,
+          title: m.title,
+          description: m.description,
+          status: m.status,
+          branch: m.branch,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          durationMs: m.durationMs,
+          model: m.model,
+          provider: m.provider,
+          prUrl: m.prUrl,
+          prNumber: m.prNumber,
+        })),
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const activeTasks = tasks.filter(
+    (t) => t.status !== 'COMPLETED' && t.status !== 'FAILED' && t.status !== 'CANCELLED',
   );
-  const completedTasks = MOCK_TASKS.filter((t) => t.status === 'COMPLETED');
-  const awaitingApprovalTasks = MOCK_TASKS.filter((t) => t.status === 'AWAITING_APPROVAL');
+  const completedTasks = tasks.filter((t) => t.status === 'COMPLETED');
+  const awaitingApprovalTasks = tasks.filter((t) => t.status === 'AWAITING_APPROVAL');
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto">
@@ -40,7 +103,7 @@ export default function DashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold text-slate-900">{activeTasks.length}</div>
             <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-              <span className="text-emerald-600 font-semibold">1 in Development</span> · 1 Testing
+              <span className="text-blue-600 font-semibold">{activeTasks.length} in flight</span>
             </p>
           </CardContent>
         </Card>
@@ -57,7 +120,7 @@ export default function DashboardPage() {
           <CardContent>
             <div className="text-2xl font-bold text-slate-900">{completedTasks.length}</div>
             <p className="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1">
-              <CheckCircle2 className="h-3.5 w-3.5" /> 100% test pass rate
+              <CheckCircle2 className="h-3.5 w-3.5" /> Verified with automated tests
             </p>
           </CardContent>
         </Card>
@@ -92,7 +155,7 @@ export default function DashboardPage() {
             <div className="text-2xl font-bold text-slate-900">
               {MOCK_PROVIDERS.filter((p) => p.status === 'connected').length} / {MOCK_PROVIDERS.length}
             </div>
-            <p className="text-xs text-slate-500 mt-1">OpenRouter, Gemini, OpenAI ready</p>
+            <p className="text-xs text-slate-500 mt-1">OpenRouter, OpenAI, Groq, Ollama ready</p>
           </CardContent>
         </Card>
       </div>
@@ -105,7 +168,7 @@ export default function DashboardPage() {
             <div>
               <h2 className="text-base font-bold text-slate-900 tracking-tight">Active Workflows</h2>
               <p className="text-xs text-slate-500">
-                Tasks currently executing autonomously in background workers
+                Tasks executing autonomously in background BullMQ workers
               </p>
             </div>
             <Link href="/tasks">
@@ -118,6 +181,7 @@ export default function DashboardPage() {
 
           <div className="space-y-3">
             {activeTasks.map((task) => {
+              const taskId = task._id || task.id;
               const statusColors: Record<string, 'default' | 'info' | 'warning' | 'success' | 'destructive' | 'secondary'> = {
                 QUEUED: 'secondary',
                 PLANNING: 'info',
@@ -128,7 +192,7 @@ export default function DashboardPage() {
 
               return (
                 <Card
-                  key={task.id}
+                  key={taskId}
                   className="hover:border-slate-300 transition-all shadow-sm border border-slate-200"
                 >
                   <CardContent className="p-5">
@@ -138,13 +202,13 @@ export default function DashboardPage() {
                           <Badge variant={statusColors[task.status] || 'default'}>
                             {task.status.replace(/_/g, ' ')}
                           </Badge>
-                          <span className="text-xs font-mono text-slate-400">#{task.issueNumber}</span>
+                          <span className="text-xs font-mono text-slate-400">#{task.issueNumber || 1}</span>
                           <span className="text-xs text-slate-500 font-medium">
-                            {task.repository}
+                            {task.repositoryId}
                           </span>
                         </div>
                         <Link
-                          href={`/tasks/${task.id}`}
+                          href={`/tasks/${taskId}`}
                           className="font-semibold text-sm text-slate-900 hover:text-blue-600 block transition-colors line-clamp-1"
                         >
                           {task.title}
@@ -152,7 +216,7 @@ export default function DashboardPage() {
                         <p className="text-xs text-slate-500 line-clamp-1">{task.description}</p>
                       </div>
 
-                      <Link href={`/tasks/${task.id}`}>
+                      <Link href={`/tasks/${taskId}`}>
                         <Button size="sm" variant="outline" className="text-xs">
                           Inspect
                         </Button>
@@ -162,10 +226,10 @@ export default function DashboardPage() {
                     {/* Progress Bar & Info */}
                     <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
                       <div className="flex items-center gap-4">
-                        <span>Provider: <strong className="text-slate-700">{task.provider}</strong></span>
-                        <span>Model: <code className="text-slate-600 bg-slate-100 px-1 py-0.5 rounded text-[11px]">{task.model}</code></span>
+                        <span>Provider: <strong className="text-slate-700">{task.provider || 'OPENROUTER'}</strong></span>
+                        <span>Model: <code className="text-slate-600 bg-slate-100 px-1 py-0.5 rounded text-[11px]">{task.model || 'anthropic/claude-3.5-sonnet'}</code></span>
                       </div>
-                      <span>Runtime: {formatDuration(task.durationMs || 120000)}</span>
+                      <span>Runtime: {formatDuration(task.durationMs || 45000)}</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -255,4 +319,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

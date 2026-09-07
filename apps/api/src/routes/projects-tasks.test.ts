@@ -56,6 +56,22 @@ function invokeApp(
       getHeader(name: string) {
         return resHeaders[name.toLowerCase()];
       },
+      writeHead(code: number, headers?: Record<string, string>) {
+        statusCode = code;
+        this.statusCode = code;
+        if (headers) {
+          for (const [k, v] of Object.entries(headers)) {
+            resHeaders[k.toLowerCase()] = String(v);
+          }
+        }
+        if (headers && (headers['Content-Type'] === 'text/event-stream' || headers['content-type'] === 'text/event-stream')) {
+          resolve({ statusCode, headers: resHeaders, body: responseBody });
+        }
+        return this;
+      },
+      write(chunk: any) {
+        return true;
+      },
       status(code: number) {
         statusCode = code;
         this.statusCode = code;
@@ -367,5 +383,20 @@ describe('Projects & Tasks Layered API Architecture', () => {
       expect(res.statusCode).toBe(409);
       expect(res.body.error).toBe('INVALID_STATE_TRANSITION');
     });
+
+    it('GET /api/v1/tasks/:taskId/events streams task events with text/event-stream headers', async () => {
+      vi.spyOn(eventRepository, 'listByTask').mockResolvedValue([
+        { _id: 'evt_1', taskId: fakeTaskId, type: 'TASK_CREATED' } as any,
+      ]);
+
+      const res = await invokeApp(app, {
+        url: `/api/v1/tasks/${fakeTaskId}/events`,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toBe('text/event-stream');
+      expect(res.headers['cache-control']).toContain('no-cache');
+    });
   });
 });
+

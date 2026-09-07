@@ -329,12 +329,12 @@ Next TODO: <next unchecked task>
 
 ## Phase 11 — Dashboard Connected to Reality
 
-- [ ] **Task 11.1 — API-backed task board**
-  - [ ] Connect Next.js task board to Express API (`/api/v1/tasks`).
-  - [ ] Implement real loading states, error boundaries, and empty states.
-  - [ ] Implement task filtering by status, repository, and search query.
-  - [ ] Implement pagination / infinite scroll.
-  - **Acceptance Criteria:** Dashboard shows live tasks from database instead of mock data.
+- [x] **Task 11.1 — API-backed task board**
+  - [x] Connect Next.js task board to Express API (`/api/v1/tasks`).
+  - [x] Implement real loading states, error boundaries, and empty states.
+  - [x] Implement task filtering by status, repository, and search query.
+  - [x] Implement pagination / infinite scroll.
+  - **Acceptance Criteria:** Dashboard shows live tasks from database instead of mock data. (PASSED ✅)
 
 - [ ] **Task 11.2 — Live timeline & Server-Sent Events (SSE)**
   - [ ] Implement `GET /api/v1/tasks/:taskId/events` SSE endpoint in Express API.

@@ -67,6 +67,42 @@ export class TaskController {
       next(err);
     }
   }
+
+  async streamTaskEvents(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const taskId = String(req.params.taskId || '');
+      
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      });
+
+      res.write(`data: ${JSON.stringify({ type: 'CONNECTED', taskId, timestamp: new Date().toISOString() })}\n\n`);
+
+      const pastEvents = await taskService.listEvents(taskId);
+      for (const evt of pastEvents) {
+        res.write(`data: ${JSON.stringify(evt)}\n\n`);
+      }
+
+      const unsubscribe = taskService.subscribeEvents(taskId, (event) => {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      });
+
+      const keepAliveTimer = setInterval(() => {
+        res.write(': ping\n\n');
+      }, 15000);
+
+      req.on('close', () => {
+        clearInterval(keepAliveTimer);
+        unsubscribe();
+        res.end();
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export const taskController = new TaskController();

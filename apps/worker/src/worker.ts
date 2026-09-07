@@ -166,10 +166,14 @@ export class WorkerService {
         );
 
         // Resolve or instantiate LLM provider
-        let llmProvider = this.options.llmProvider;
+        let llmProvider: LLMProvider | undefined = this.options.llmProvider;
         if (!llmProvider) {
           try {
-            llmProvider = providerFactory.get(provider || LLMProviderType.OPENROUTER);
+            llmProvider = providerFactory.getOrCreate({
+              providerType: (provider as any) || LLMProviderType.OPENROUTER,
+              apiKey: process.env.OPENROUTER_API_KEY || 'mock_key',
+              defaultModel: model || 'anthropic/claude-3.5-sonnet',
+            });
           } catch {
             llmProvider = new MockLLMProvider();
           }
