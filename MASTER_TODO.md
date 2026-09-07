@@ -528,10 +528,10 @@ Next TODO: <next unchecked task>
   - [x] Implement automatic secret redaction.
   - **Acceptance Criteria:** Logs are structured JSON with complete correlation IDs. (PASSED ✅)
 
-- [ ] **Task 19.2 — OpenTelemetry tracing**
-  - [ ] Add OpenTelemetry SDK instrumentation.
-  - [ ] Trace API requests, BullMQ jobs, LLM calls, tool executions, and sandbox runs.
-  - **Acceptance Criteria:** Traces provide end-to-end visualization of task execution.
+- [x] **Task 19.2 — OpenTelemetry tracing**
+  - [x] Add OpenTelemetry SDK instrumentation.
+  - [x] Trace API requests, BullMQ jobs, LLM calls, tool executions, and sandbox runs.
+  - **Acceptance Criteria:** Traces provide end-to-end visualization of task execution. (PASSED ✅)
 
 - [ ] **Task 19.3 — Operational metrics**
   - [ ] Track task duration, success rate, retry rate, tool latency, token usage, and cost estimates.
