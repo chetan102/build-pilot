@@ -40,7 +40,6 @@ export const ALLOWED_TASK_TRANSITIONS: Record<TaskStatusType, readonly TaskStatu
   [TaskStatus.PLANNING]: [
     TaskStatus.READY_FOR_DEVELOPMENT,
     TaskStatus.DEVELOPMENT,
-    TaskStatus.COMPLETED,
     TaskStatus.FAILED,
     TaskStatus.CANCELLED,
     TaskStatus.BLOCKED,
@@ -55,7 +54,6 @@ export const ALLOWED_TASK_TRANSITIONS: Record<TaskStatusType, readonly TaskStatu
   [TaskStatus.DEVELOPMENT]: [
     TaskStatus.TESTING,
     TaskStatus.AWAITING_APPROVAL,
-    TaskStatus.COMPLETED,
     TaskStatus.FAILED,
     TaskStatus.CANCELLED,
     TaskStatus.BLOCKED,
@@ -64,7 +62,6 @@ export const ALLOWED_TASK_TRANSITIONS: Record<TaskStatusType, readonly TaskStatu
   [TaskStatus.TESTING]: [
     TaskStatus.REVIEW,
     TaskStatus.REPAIRING,
-    TaskStatus.COMPLETED,
     TaskStatus.FAILED,
     TaskStatus.CANCELLED,
     TaskStatus.BLOCKED,

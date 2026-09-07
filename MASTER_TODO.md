@@ -8,10 +8,10 @@
 
 ## 📊 Overall Progress Summary
 
-- **Current Phase:** Phase 12 — Reliability & Durable Workflow
-- **Current Task:** Task 12.1 — Persistent state machine & transactional transitions
-- **Project Status:** 🟢 IN PROGRESS (Phase 0-11: 100% Complete ✅ | Phase 12: 0% Complete)
-- **Completed Tasks:** 24 / 35 Tasks Complete
+- **Current Phase:** Phase 13 — Sandbox Execution
+- **Current Task:** Task 13.1 — Docker sandbox runner
+- **Project Status:** 🟢 IN PROGRESS (Phase 0-12: 100% Complete ✅ | Phase 13: 0% Complete)
+- **Completed Tasks:** 27 / 35 Tasks Complete
 
 ---
 
@@ -365,11 +365,11 @@ Next TODO: <next unchecked task>
   - [x] Implement safe resume from last checkpoint without duplicate PRs or branch corruption.
   - **Acceptance Criteria:** Killing and restarting worker resumes or recovers task safely. (PASSED ✅)
 
-- [ ] **Task 12.3 — Idempotency guards**
-  - [ ] Guard against duplicate webhook deliveries.
-  - [ ] Guard against duplicate queue job processing.
-  - [ ] Guard against duplicate branch creation and PR opening.
-  - **Acceptance Criteria:** Replayed events produce no duplicate external side effects.
+- [x] **Task 12.3 — Idempotency guards**
+  - [x] Guard against duplicate webhook deliveries.
+  - [x] Guard against duplicate queue job processing.
+  - [x] Guard against duplicate branch creation and PR opening.
+  - **Acceptance Criteria:** Replayed events produce no duplicate external side effects. (PASSED ✅)
 
 ---
 

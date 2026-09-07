@@ -1473,3 +1473,69 @@ data: {"type":"TASK_RUN_STARTED","taskId":"<TASK_ID>", ...}
 : ping
 ```
 
+---
+
+## Phase 12 — Reliability & Durable Workflow
+
+### Tasks 12.1, 12.2 & 12.3: Heartbeat Leases, Checkpoints, Crash Recovery & Idempotency Guards
+
+#### 📂 Key Files to Study:
+- [`packages/database/src/models/task-run.model.ts`](./packages/database/src/models/task-run.model.ts) — Checkpointing & heartbeat lease schemas for durable task execution.
+- [`apps/worker/src/durability/heartbeat-manager.ts`](./apps/worker/src/durability/heartbeat-manager.ts) — Background heartbeat session renewing active leases while tasks execute.
+- [`apps/worker/src/durability/crash-recovery.ts`](./apps/worker/src/durability/crash-recovery.ts) — Crash recovery service identifying stalled workers with expired leases and safely resetting task states.
+- [`packages/shared/src/idempotency.ts`](./packages/shared/src/idempotency.ts) — `IdempotencyGuard` preventing duplicate webhook processing, duplicate branch creation, and duplicate PR submissions.
+
+#### 🔄 Heartbeat Lease & Crash Recovery Architecture:
+```mermaid
+flowchart TD
+    subgraph Execution["Worker Execution Loop"]
+        Worker["Worker Job Started"]
+        Heartbeat["TaskHeartbeatSession.start()\n(Renews lease every 10s)"]
+        Checkpoint["taskRunRepo.saveCheckpoint(stage, stepIndex)"]
+        Done["Job Completed -> session.stop()"]
+    end
+
+    subgraph Crash_Detector["Crash Recovery & Durability Service"]
+        CheckStalled["findStalledRuns(threshold: now - 60s)"]
+        FoundStalled{"Expired Lease Found?"}
+        MarkFailed["taskRunRepo.markFailed(reason)"]
+        RecordAudit["eventRepo.create(WORKER_CRASH_DETECTED)"]
+        ResetTask["taskRepo.updateStatus(TIMED_OUT / QUEUED)"]
+    end
+
+    Worker --> Heartbeat
+    Worker --> Checkpoint
+    Worker --> Done
+    CheckStalled --> FoundStalled
+    FoundStalled -->|Yes| MarkFailed
+    MarkFailed --> RecordAudit
+    RecordAudit --> ResetTask
+```
+
+#### 💡 Core Concepts & Why It's Built This Way:
+- **Lease-Based Worker Liveness**: Rather than guessing whether a worker is alive, workers hold a time-bounded distributed lease in MongoDB. If a node loses power or suffers an Out-Of-Memory SIGKILL, the lease naturally expires within 30 seconds.
+- **Stage Checkpointing**: Long-running multi-step agents record checkpoints after every reasoning step and stage transition (`PLANNING`, `DEVELOPMENT`, `TESTING`). This preserves progress and provides forensic history.
+- **Strict Idempotency Guards**: Distributed systems inevitably replay messages (duplicate webhook deliveries, queue retries). `IdempotencyGuard` enforces distributed mutex locks and processed markers to ensure external mutations (branch pushing, PR creation) occur strictly once.
+
+#### 🧪 How to Manually Run & Test:
+
+##### Step 1: Run Durability & Idempotency Test Suites
+```bash
+pnpm --filter @buildpilot/worker test src/durability/ && pnpm --filter @buildpilot/shared test
+```
+**Expected Output:**
+```text
+ ✓ src/durability/crash-recovery.test.ts (2 tests)
+ ✓ src/durability/heartbeat-manager.test.ts (2 tests)
+ ✓ src/idempotency.test.ts (2 tests)
+ Test Files  3 passed (3)
+      Tests  6 passed (6)
+```
+
+##### Step 2: Run Full Monorepo Verification
+```bash
+pnpm test && pnpm run typecheck
+```
+Verify that all 22 test suites pass with 100% clean verification across all 12 monorepo packages.
+
+
