@@ -418,11 +418,11 @@ Next TODO: <next unchecked task>
   - [x] Produce structured review report (Approved / Changes Requested).
   - **Acceptance Criteria:** Reviewer provides independent validation before PR creation. (PASSED ✅)
 
-- [ ] **Task 14.4 — Bounded repair loop**
-  - [ ] Feed Reviewer findings or failing test outputs back to Developer.
-  - [ ] Enforce maximum repair iteration limit (e.g. max 3 repair cycles).
-  - [ ] Persist iteration history.
-  - **Acceptance Criteria:** System autonomously fixes minor bugs/test failures up to iteration limit.
+- [x] **Task 14.4 — Bounded repair loop**
+  - [x] Feed Reviewer findings or failing test outputs back to Developer.
+  - [x] Enforce maximum repair iteration limit (e.g. max 3 repair cycles).
+  - [x] Persist iteration history.
+  - **Acceptance Criteria:** System autonomously fixes minor bugs/test failures up to iteration limit. (PASSED ✅)
 
 ---
 
