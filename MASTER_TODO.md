@@ -548,10 +548,10 @@ Next TODO: <next unchecked task>
   - [x] Include seeded bugs, test suites, and expected diffs.
   - **Acceptance Criteria:** Benchmark suite covers bug fixes, refactoring, feature additions, and tests. (PASSED ✅)
 
-- [ ] **Task 20.2 — Automated benchmark runner**
-  - [ ] Script to execute benchmark tasks across selected models and providers.
-  - [ ] Record pass/fail, test results, retries, duration, tool call count, and token cost.
-  - **Acceptance Criteria:** Runner produces reproducible benchmark runs.
+- [x] **Task 20.2 — Automated benchmark runner**
+  - [x] Script to execute benchmark tasks across selected models and providers.
+  - [x] Record pass/fail, test results, retries, duration, tool call count, and token cost.
+  - **Acceptance Criteria:** Runner produces reproducible benchmark runs. (PASSED ✅)
 
 - [ ] **Task 20.3 — Evaluation dashboard**
   - [ ] Evaluation UI displaying pass rate, cost comparison, and failure breakdown by provider/model.
