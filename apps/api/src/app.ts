@@ -8,7 +8,7 @@ import { createErrorHandler } from './middlewares/error.middleware.js';
 import { healthRouter } from './routes/health.router.js';
 import { projectsRouter } from './routes/projects.router.js';
 import { tasksRouter } from './routes/tasks.router.js';
-import { webhooksRouter } from './routes/webhooks.router.js';
+import { githubRouter } from './routes/github.router.js';
 
 export interface AppOptions {
   logger?: Logger;
@@ -46,7 +46,7 @@ export function createApp(options: AppOptions = {}): Express {
   // Core API v1 routes
   app.use('/api/v1/projects', projectsRouter);
   app.use('/api/v1/tasks', tasksRouter);
-  app.use('/api/v1/github', webhooksRouter);
+  app.use('/api/v1/github', githubRouter);
 
   // Custom / feature routes
   if (options.routes) {

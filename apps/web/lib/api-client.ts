@@ -155,6 +155,125 @@ export async function retryTask(taskId: string): Promise<any> {
   return res.json();
 }
 
+export interface GitHubRepoSummary {
+  id: number;
+  name: string;
+  fullName: string;
+  owner: string;
+  defaultBranch: string;
+  isPrivate: boolean;
+  description?: string | null;
+  htmlUrl: string;
+  stargazersCount?: number;
+  language?: string | null;
+  updatedAt?: string | null;
+  alreadyImported?: boolean;
+  projectId?: string;
+}
+
+export interface GitHubUser {
+  id: number;
+  login: string;
+  name?: string | null;
+  email?: string | null;
+  avatarUrl: string;
+  htmlUrl: string;
+}
+
+export async function fetchGitHubOAuthAuthorize(): Promise<{ configured: boolean; url?: string; message?: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/github/oauth/authorize`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to get OAuth authorize URL: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function fetchGitHubUser(token?: string): Promise<{ connected: boolean; user: GitHubUser | null; error?: string }> {
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+    headers['x-github-token'] = token;
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/v1/github/user`, {
+    headers,
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    return { connected: false, user: null };
+  }
+  return res.json();
+}
+
+export async function fetchGitHubRepositories(token?: string): Promise<{ repositories: GitHubRepoSummary[]; count: number }> {
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+    headers['x-github-token'] = token;
+  }
+
+  const res = await fetch(`${API_BASE_URL}/api/v1/github/repos`, {
+    headers,
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error || `Failed to fetch GitHub repositories: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function verifyGitHubToken(token: string): Promise<{ valid: boolean; user?: GitHubUser; error?: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/github/oauth/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  return res.json();
+}
+
+export async function importGitHubRepository(data: {
+  repoFullName: string;
+  name?: string;
+  description?: string;
+  defaultBranch?: string;
+  token?: string;
+}): Promise<{ success: boolean; project: ProjectSummary; message?: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/github/repos/import`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to import repository: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function createTaskForProject(
+  projectId: string,
+  data: {
+    title: string;
+    description?: string;
+    repositoryId?: string;
+    baseBranch?: string;
+  },
+): Promise<{ task: TaskSummary }> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/projects/${projectId}/tasks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || `Failed to create task: ${res.statusText}`);
+  }
+  return res.json();
+}
+
 export function getTaskEventsStreamUrl(taskId: string): string {
   return `${API_BASE_URL}/api/v1/tasks/${taskId}/events`;
 }

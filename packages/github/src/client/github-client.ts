@@ -19,6 +19,35 @@ export interface CreatePullRequestParams {
   draft?: boolean;
 }
 
+export interface GitHubRepositorySummary {
+  id: number;
+  name: string;
+  fullName: string;
+  owner: string;
+  defaultBranch: string;
+  isPrivate: boolean;
+  description?: string | null;
+  htmlUrl: string;
+  stargazersCount?: number;
+  language?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface GitHubUserProfile {
+  id: number;
+  login: string;
+  name?: string | null;
+  email?: string | null;
+  avatarUrl: string;
+  htmlUrl: string;
+}
+
+export interface OAuthTokenExchangeResult {
+  accessToken: string;
+  tokenType: string;
+  scope: string;
+}
+
 export class GitHubService {
   private octokit: Octokit;
   private logger: Logger;
@@ -29,6 +58,107 @@ export class GitHubService {
       auth: options.auth || process.env.GITHUB_TOKEN,
       baseUrl: options.baseUrl,
     });
+  }
+
+  getOAuthAuthorizationUrl(params: {
+    clientId: string;
+    redirectUri?: string;
+    state?: string;
+    scope?: string;
+  }): string {
+    const {
+      clientId,
+      redirectUri = process.env.GITHUB_OAUTH_REDIRECT_URI || 'http://localhost:4000/api/v1/github/oauth/callback',
+      state = 'buildpilot_oauth',
+      scope = 'repo,read:user,user:email',
+    } = params;
+
+    const query = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      scope,
+      state,
+      allow_signup: 'true',
+    });
+
+    return `https://github.com/login/oauth/authorize?${query.toString()}`;
+  }
+
+  async exchangeOAuthCode(params: {
+    clientId: string;
+    clientSecret: string;
+    code: string;
+    redirectUri?: string;
+  }): Promise<OAuthTokenExchangeResult> {
+    const { clientId, clientSecret, code, redirectUri } = params;
+    this.logger.info('Exchanging OAuth code for GitHub access token');
+
+    const res = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+        redirect_uri: redirectUri,
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`GitHub OAuth exchange failed: ${res.statusText}`);
+    }
+
+    const data: any = await res.json();
+    if (data.error) {
+      throw new Error(`GitHub OAuth error: ${data.error_description || data.error}`);
+    }
+
+    return {
+      accessToken: data.access_token,
+      tokenType: data.token_type || 'bearer',
+      scope: data.scope || '',
+    };
+  }
+
+  async getAuthenticatedUser(customAuth?: string): Promise<GitHubUserProfile> {
+    const client = customAuth ? new Octokit({ auth: customAuth }) : this.octokit;
+    const res = await client.rest.users.getAuthenticated();
+    return {
+      id: res.data.id,
+      login: res.data.login,
+      name: res.data.name,
+      email: res.data.email,
+      avatarUrl: res.data.avatar_url,
+      htmlUrl: res.data.html_url,
+    };
+  }
+
+  async listUserRepositories(customAuth?: string): Promise<GitHubRepositorySummary[]> {
+    const client = customAuth ? new Octokit({ auth: customAuth }) : this.octokit;
+    this.logger.info('Fetching repositories for authenticated GitHub user');
+
+    const res = await client.rest.repos.listForAuthenticatedUser({
+      sort: 'updated',
+      per_page: 100,
+      affiliation: 'owner,collaborator,organization_member',
+    });
+
+    return res.data.map((repo) => ({
+      id: repo.id,
+      name: repo.name,
+      fullName: repo.full_name,
+      owner: repo.owner.login,
+      defaultBranch: repo.default_branch || 'main',
+      isPrivate: repo.private,
+      description: repo.description,
+      htmlUrl: repo.html_url,
+      stargazersCount: repo.stargazers_count,
+      language: repo.language,
+      updatedAt: repo.updated_at,
+    }));
   }
 
   async createIssueComment(

@@ -13,6 +13,10 @@ export const envSchema = z.object({
   DEFAULT_LLM_PROVIDER: z.string().default('openrouter'),
   DEFAULT_LLM_MODEL: z.string().default('anthropic/claude-3.5-sonnet'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  GITHUB_CLIENT_ID: z.string().optional(),
+  GITHUB_CLIENT_SECRET: z.string().optional(),
+  GITHUB_OAUTH_REDIRECT_URI: z.string().optional(),
+  NEXT_PUBLIC_APP_URL: z.string().default('http://localhost:3000'),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

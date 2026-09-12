@@ -6,6 +6,9 @@ export interface IProject {
   description?: string;
   ownerId: string;
   active: boolean;
+  githubRepoFullName?: string;
+  defaultBranch?: string;
+  encryptedAccessToken?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -17,6 +20,9 @@ export const ProjectSchema = new Schema<IProject>(
     description: { type: String },
     ownerId: { type: String, required: true, index: true },
     active: { type: Boolean, default: true, index: true },
+    githubRepoFullName: { type: String, trim: true, index: true },
+    defaultBranch: { type: String, default: 'main' },
+    encryptedAccessToken: { type: String },
   },
   { timestamps: true },
 );
