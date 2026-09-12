@@ -18,10 +18,11 @@ import {
   GitBranch,
   KeyRound,
   LogOut,
-  Layers,
   Play,
   X,
   FolderGit2,
+  ShieldCheck,
+  Zap,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -49,6 +50,7 @@ export default function ProjectsPage() {
   const [loadingRepos, setLoadingRepos] = React.useState(false);
   const [repoSearch, setRepoSearch] = React.useState('');
   const [importingRepo, setImportingRepo] = React.useState<string | null>(null);
+  const [connectingOAuth, setConnectingOAuth] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
 
@@ -73,7 +75,11 @@ export default function ProjectsPage() {
       const urlError = urlParams.get('error');
 
       if (urlError) {
-        setErrorMessage(`GitHub OAuth Error: ${urlError}`);
+        if (urlError === 'missing_github_client_id' || urlError === 'oauth_not_configured') {
+          setErrorMessage('GitHub OAuth App is not configured yet in .env (GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET). You can also connect with a Personal Access Token.');
+        } else {
+          setErrorMessage(`GitHub OAuth Error: ${urlError}`);
+        }
       }
 
       if (urlToken) {
@@ -114,8 +120,9 @@ export default function ProjectsPage() {
       setLoadingProjects(true);
       const data = await fetchProjects();
       setProjects(data.projects || []);
-    } catch (err: any) {
-      console.warn('Could not fetch projects list:', err);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn('Could not fetch projects list:', msg);
     } finally {
       setLoadingProjects(false);
     }
@@ -141,8 +148,9 @@ export default function ProjectsPage() {
         setGithubUser(userRes.user);
       }
       await loadReposList(token);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to connect to GitHub');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMessage(msg || 'Failed to connect to GitHub');
     } finally {
       setLoadingRepos(false);
     }
@@ -153,25 +161,35 @@ export default function ProjectsPage() {
       setLoadingRepos(true);
       const res = await fetchGitHubRepositories(token);
       setRepos(res.repositories || []);
-    } catch (err: any) {
-      console.warn('Could not list repos:', err);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn('Could not list repos:', msg);
     } finally {
       setLoadingRepos(false);
     }
   }
 
-  // Connect via OAuth
+  // Connect via Direct OAuth
   async function handleConnectOAuth() {
     try {
+      setConnectingOAuth(true);
       setErrorMessage(null);
       const data = await fetchGitHubOAuthAuthorize();
       if (data.configured && data.url) {
         window.location.href = data.url;
-      } else {
-        setShowTokenModal(true);
+        return;
+      }
+      if (!data.configured) {
+        setErrorMessage(
+          'GitHub OAuth App is not configured in .env (GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET). Please add your GitHub OAuth App credentials or connect using your Personal Access Token below.',
+        );
       }
     } catch {
-      setShowTokenModal(true);
+      // Direct redirect fallback to API authorize endpoint
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+      window.location.href = `${apiBase}/api/v1/github/oauth/authorize?redirect=true`;
+    } finally {
+      setConnectingOAuth(false);
     }
   }
 
@@ -192,8 +210,9 @@ export default function ProjectsPage() {
       } else {
         setErrorMessage(res.error || 'Invalid token. Please check your token scopes.');
       }
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to verify GitHub token');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMessage(msg || 'Failed to verify GitHub token');
     } finally {
       setVerifyingToken(false);
     }
@@ -227,8 +246,9 @@ export default function ProjectsPage() {
       if (res.project) {
         setSelectedProjectForTask(res.project);
       }
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to import repository');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMessage(msg || 'Failed to import repository');
     } finally {
       setImportingRepo(null);
     }
@@ -240,18 +260,19 @@ export default function ProjectsPage() {
     try {
       setCreatingTask(true);
       setErrorMessage(null);
-      const projectId = (selectedProjectForTask as any)._id || selectedProjectForTask.slug || selectedProjectForTask.id;
+      const projectId = (selectedProjectForTask as { _id?: string; slug?: string; id?: string })._id || selectedProjectForTask.slug || selectedProjectForTask.id;
       const res = await createTaskForProject(projectId, {
         title: taskTitle.trim(),
         description: taskDescription.trim() || undefined,
-        repositoryId: (selectedProjectForTask as any).githubRepoFullName || selectedProjectForTask.name,
+        repositoryId: (selectedProjectForTask as { githubRepoFullName?: string }).githubRepoFullName || selectedProjectForTask.name,
         baseBranch: selectedProjectForTask.defaultBranch || 'main',
       });
 
-      const taskId = (res.task as any)._id || res.task.id;
+      const taskId = (res.task as { _id?: string; id?: string })._id || res.task.id;
       window.location.href = `/tasks/${taskId}`;
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to create task');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMessage(msg || 'Failed to create task');
       setCreatingTask(false);
     }
   }
@@ -272,7 +293,7 @@ export default function ProjectsPage() {
             Projects & GitHub Integration
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Connect your GitHub account via OAuth or Token, select repositories, and launch autonomous AI engineering tasks.
+            Connect your GitHub account via OAuth to browse repositories, select branches, and dispatch autonomous AI tasks.
           </p>
         </div>
 
@@ -301,10 +322,15 @@ export default function ProjectsPage() {
             <Button
               size="sm"
               onClick={handleConnectOAuth}
+              disabled={connectingOAuth}
               className="gap-2 text-xs bg-slate-900 hover:bg-slate-800 text-white shadow-sm h-8 px-3.5 font-semibold"
             >
-              <Github className="h-4 w-4" />
-              <span>Connect GitHub (OAuth)</span>
+              {connectingOAuth ? (
+                <RefreshCw className="h-4 w-4 animate-spin text-white" />
+              ) : (
+                <Github className="h-4 w-4" />
+              )}
+              <span>{connectingOAuth ? 'Redirecting to GitHub...' : 'Authorize with GitHub (OAuth)'}</span>
             </Button>
           )}
 
@@ -323,8 +349,11 @@ export default function ProjectsPage() {
 
       {/* Alert Messages */}
       {errorMessage && (
-        <div className="p-3.5 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center justify-between font-medium">
-          <span>{errorMessage}</span>
+        <div className="p-4 bg-red-50 border border-red-200 text-red-800 text-xs rounded-xl flex items-start justify-between gap-3 font-medium">
+          <div className="space-y-1">
+            <span className="font-bold block">GitHub Connection Notice</span>
+            <span>{errorMessage}</span>
+          </div>
           <button onClick={() => setErrorMessage(null)} className="text-red-500 hover:text-red-700 font-bold text-base px-1">×</button>
         </div>
       )}
@@ -336,7 +365,7 @@ export default function ProjectsPage() {
       )}
 
       {/* GitHub Repository Selector Section */}
-      <Card className="border-indigo-100 bg-gradient-to-br from-indigo-50/50 via-white to-slate-50/50 shadow-xs rounded-2xl">
+      <Card className="border-indigo-100 bg-gradient-to-br from-indigo-50/40 via-white to-slate-50/40 shadow-xs rounded-2xl">
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
@@ -382,30 +411,60 @@ export default function ProjectsPage() {
 
         <CardContent className="pt-2">
           {!githubUser ? (
-            <div className="text-center py-10 px-4 bg-white/90 rounded-2xl border border-dashed border-slate-200">
-              <div className="h-12 w-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center mx-auto mb-3 shadow-sm">
-                <Github className="h-6 w-6" />
+            <div className="text-center py-12 px-6 bg-white/95 rounded-2xl border border-dashed border-slate-200 shadow-xs">
+              <div className="h-14 w-14 rounded-2xl bg-slate-900 text-white flex items-center justify-center mx-auto mb-4 shadow-md ring-4 ring-slate-100">
+                <Github className="h-7 w-7" />
               </div>
-              <h3 className="text-base font-bold text-slate-900">Connect Your GitHub Account</h3>
-              <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 mb-5 leading-relaxed">
-                Authorize BuildPilot to access your repositories, issues, and pull requests to start autonomous AI development.
+              <h3 className="text-lg font-bold text-slate-900">Connect Your GitHub Account</h3>
+              <p className="text-xs text-slate-500 max-w-lg mx-auto mt-1.5 mb-6 leading-relaxed">
+                Authorize BuildPilot with GitHub OAuth to grant read/write access for automated issue intake, branch creation, code writing, and pull request generation.
               </p>
+              
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <Button
                   onClick={handleConnectOAuth}
-                  className="gap-2 text-xs bg-slate-900 hover:bg-slate-800 text-white h-9 px-4 font-semibold"
+                  disabled={connectingOAuth}
+                  className="gap-2.5 text-xs bg-slate-900 hover:bg-slate-800 text-white h-10 px-5 font-semibold shadow-sm rounded-xl"
                 >
-                  <Github className="h-4 w-4" />
-                  <span>Authorize with GitHub (OAuth)</span>
+                  {connectingOAuth ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Github className="h-4 w-4" />
+                  )}
+                  <span>{connectingOAuth ? 'Redirecting to GitHub...' : 'Authorize with GitHub (OAuth)'}</span>
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => setShowTokenModal(true)}
-                  className="text-xs gap-1.5 h-9 px-4 bg-white"
+                  className="text-xs gap-1.5 h-10 px-4 bg-white border-slate-200 rounded-xl"
                 >
-                  <KeyRound className="h-3.5 w-3.5" />
+                  <KeyRound className="h-3.5 w-3.5 text-slate-500" />
                   <span>Use Personal Access Token</span>
                 </Button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-xl mx-auto mt-8 pt-6 border-t border-slate-100 text-left">
+                <div className="p-3 bg-slate-50 rounded-xl flex items-start gap-2.5 border border-slate-100">
+                  <ShieldCheck className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" />
+                  <div className="text-[11px]">
+                    <span className="font-bold text-slate-800 block">OAuth 2.0 Security</span>
+                    <span className="text-slate-500">Tokens encrypted with AES-256 at rest</span>
+                  </div>
+                </div>
+                <div className="p-3 bg-slate-50 rounded-xl flex items-start gap-2.5 border border-slate-100">
+                  <FolderGit2 className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" />
+                  <div className="text-[11px]">
+                    <span className="font-bold text-slate-800 block">Repo Browser</span>
+                    <span className="text-slate-500">1-click repository import and branch pick</span>
+                  </div>
+                </div>
+                <div className="p-3 bg-slate-50 rounded-xl flex items-start gap-2.5 border border-slate-100">
+                  <Zap className="h-4 w-4 text-indigo-600 mt-0.5 shrink-0" />
+                  <div className="text-[11px]">
+                    <span className="font-bold text-slate-800 block">Instant AI Launch</span>
+                    <span className="text-slate-500">Autonomous planning & code writing</span>
+                  </div>
+                </div>
               </div>
             </div>
           ) : loadingRepos ? (
@@ -418,7 +477,7 @@ export default function ProjectsPage() {
               {repoSearch ? 'No matching repositories found.' : 'No repositories found under this account.'}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[420px] overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 max-h-[460px] overflow-y-auto pr-1">
               {filteredRepos.map((repo) => {
                 const isImporting = importingRepo === repo.fullName;
                 return (
@@ -475,7 +534,7 @@ export default function ProjectsPage() {
                           size="sm"
                           variant="ghost"
                           onClick={() => {
-                            const found = projects.find((p) => p.name === repo.name || (p as any).githubRepoFullName === repo.fullName);
+                            const found = projects.find((p) => p.name === repo.name || (p as { githubRepoFullName?: string }).githubRepoFullName === repo.fullName);
                             if (found) setSelectedProjectForTask(found);
                           }}
                           className="h-7 text-[11px] text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 font-bold gap-1 px-2.5"
@@ -533,7 +592,7 @@ export default function ProjectsPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {projects.map((project) => (
-              <Card key={project.id || (project as any)._id} className="border-slate-200/90 shadow-xs hover:shadow-md transition rounded-2xl bg-white">
+              <Card key={project.id || (project as { _id?: string })._id} className="border-slate-200/90 shadow-xs hover:shadow-md transition rounded-2xl bg-white">
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -541,7 +600,7 @@ export default function ProjectsPage() {
                       {project.name}
                     </CardTitle>
                     <Badge variant="outline" className="text-[10px] font-mono">
-                      {(project as any).githubRepoFullName || project.slug}
+                      {(project as { githubRepoFullName?: string }).githubRepoFullName || project.slug}
                     </Badge>
                   </div>
                   <CardDescription className="text-xs text-slate-500">
@@ -553,7 +612,7 @@ export default function ProjectsPage() {
                     <div>
                       <span className="text-slate-400 block text-[10px] font-medium">Default Branch</span>
                       <span className="font-bold text-slate-800">
-                        {(project as any).defaultBranch || 'main'}
+                        {(project as { defaultBranch?: string }).defaultBranch || 'main'}
                       </span>
                     </div>
                     <div>
@@ -571,7 +630,7 @@ export default function ProjectsPage() {
 
                   <div className="flex items-center justify-between pt-1">
                     <Link
-                      href={`/tasks?projectId=${(project as any)._id || project.id || project.slug}`}
+                      href={`/tasks?projectId=${(project as { _id?: string })._id || project.id || project.slug}`}
                       className="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1"
                     >
                       <span>View Tasks</span>
