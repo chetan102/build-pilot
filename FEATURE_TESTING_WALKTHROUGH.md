@@ -1,315 +1,323 @@
-# 🚀 BuildPilot — Hands-On Feature Testing Walkthrough
+# 🚀 BuildPilot — Complete Hands-On Feature Testing Runbook
 
-> **Welcome to BuildPilot!**  
-> This guide is designed for **first-time users**. You do not need any prior knowledge of the codebase.  
-> Follow this step-by-step test journey to see and test **every single live feature** in the platform, from clicking in the UI to running automated agents and inspecting real-time telemetry.
-
----
-
-## 📋 What is BuildPilot? (In 2 Sentences)
-**BuildPilot** is an autonomous AI software engineer platform. It receives GitHub issues, plans the fix with read-only tools, edits code in isolated Git worktrees, verifies the changes by running real test suites inside Docker sandboxes, and automatically creates GitHub Pull Requests.
+> **Welcome to the BuildPilot Deep Testing Guide!**  
+> This runbook is a comprehensive, step-by-step master guide to testing **every single capability of BuildPilot** from scratch.  
+> You will create a real GitHub test repository, connect it via 1-click GitHub OAuth, dispatch autonomous AI coding tasks, observe multi-agent planning and live execution, test human approval gating, and watch BuildPilot automatically open real GitHub Pull Requests.
 
 ---
 
-## 🏁 Step 0: Start the Entire System (1 Minute)
+## 📑 Table of Contents
+1. [Prerequisites & Environment Check](#-part-1-prerequisites--environment-check)
+2. [Setting Up Your GitHub Test Repository (2 Minutes)](#-part-2-setting-up-your-github-test-repository-2-minutes)
+3. [Connecting GitHub via OAuth & Importing Repositories](#-part-3-connecting-github-via-oauth--importing-repositories)
+4. [5 Realistic AI Engineering Tasks to Test](#-part-4-5-realistic-ai-engineering-tasks-to-test)
+   - [Test Task 1: Autonomous Bug Fix with Test Verification](#-test-task-1-autonomous-bug-fix-with-test-verification)
+   - [Test Task 2: New Feature Implementation & Unit Tests](#-test-task-2-new-feature-implementation--unit-tests)
+   - [Test Task 3: Security & Input Validation Hardening](#-test-task-3-security--input-validation-hardening)
+   - [Test Task 4: Testing Human-in-the-Loop Approval Gating](#-test-task-4-testing-human-in-the-loop-approval-gating)
+   - [Test Task 5: End-to-End GitHub Webhook Automation (`buildpilot` label $\rightarrow$ PR)](#-test-task-5-end-to-end-github-webhook-automation-buildpilot-label--pr)
+5. [Testing the Live UI (Dashboard, Kanban, SSE Stream, Diff Viewer)](#-part-5-testing-the-live-ui-dashboard-kanban-sse-stream-diff-viewer)
+6. [Testing LLM Provider Switching (Gemini, Claude, GPT-4o, OpenRouter)](#-part-6-testing-llm-provider-switching)
+7. [Testing Failure Recovery & Retry Resiliency](#-part-7-testing-failure-recovery--retry-resiliency)
+8. [Automated Benchmark Harness & Telemetry](#-part-8-automated-benchmark-harness--telemetry)
 
-### 1. Start the Database & Queue Containers
-Open your terminal in the `build-pilot` folder:
+---
+
+## 🛠️ Part 1: Prerequisites & Environment Check
+
+### 1. Start Infrastructure Containers
+Open your terminal in the `build-pilot` root directory:
 ```bash
 docker compose -f infra/docker-compose.yml up -d
 ```
-*(This starts MongoDB 7 on port 27017 and Redis 7 on port 6379).*
-
-### 2. Start All Services
+Verify MongoDB and Redis are running:
 ```bash
-pnpm run dev
+docker ps
 ```
-*(This runs the **Next.js Web Dashboard** on `http://localhost:3000`, the **Express Control API** on `http://localhost:4000`, and the **BullMQ Background Agent Worker** simultaneously).*
+*(You should see `mongodb` on port `27017` and `redis` on port `6379` healthy).*
+
+### 2. Verify `.env` Configuration
+Open your `.env` file and make sure you have:
+1. An active AI API key (e.g. `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENAI_API_KEY`).
+2. GitHub OAuth App credentials (`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`) or your `GITHUB_TOKEN`.
+
+### 3. Launch BuildPilot
+```bash
+pnpm dev
+```
+*(Starts Web UI on `http://localhost:3000`, API on `http://localhost:4000`, and Worker in background).*
 
 ---
 
-## 🧪 Interactive Feature Tests (Test Them One by One)
+## 📦 Part 2: Setting Up Your GitHub Test Repository (2 Minutes)
 
----
+To test BuildPilot on real code with real tests, create a small test repository on your GitHub account.
 
-### 🌟 Feature 1: System Readiness & API Health Check
+### Step 2.1: Create a new repository on GitHub
+1. Go to **[https://github.com/new](https://github.com/new)**.
+2. Repository name: **`buildpilot-sandbox-app`**
+3. Set visibility to **Public** (or **Private**).
+4. Check **Add a README file**.
+5. Click **Create repository**.
 
-**What it tests:** Verifies that the API server, MongoDB connection pool, and Redis queue engine are healthy with sub-millisecond latencies.
+### Step 2.2: Add Starter Code (Calculator API with a seeded bug)
+Clone your newly created repository locally or use GitHub Web Editor (press `.` in GitHub):
 
-**How to test:**
-1. Open a new terminal tab.
-2. Run:
-```bash
-curl -s http://localhost:4000/ready | jq .
-```
-**Expected Output:**
+Create a file **`package.json`**:
 ```json
 {
-  "status": "ready",
-  "database": { "status": "healthy", "latencyMs": 1 },
-  "redis": { "status": "healthy", "latencyMs": 1 }
+  "name": "buildpilot-sandbox-app",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node --test"
+  }
 }
 ```
-✅ **What you just verified:** The Express control plane is live, connected to MongoDB, and connected to the Redis queue.
+
+Create a file **`calculator.js`** *(Note: contains an intentional bug in `divide`)*:
+```javascript
+function add(a, b) {
+  return a + b;
+}
+
+function subtract(a, b) {
+  return a - b;
+}
+
+function multiply(a, b) {
+  return a * b;
+}
+
+// BUG: divide returns multiplication instead of division!
+function divide(a, b) {
+  if (b === 0) {
+    throw new Error('Division by zero is not allowed');
+  }
+  return a * b; // <-- Seeded Bug for AI Agent to fix
+}
+
+module.exports = { add, subtract, multiply, divide };
+```
+
+Create a test file **`calculator.test.js`**:
+```javascript
+const test = require('node:test');
+const assert = require('node:assert');
+const { add, subtract, multiply, divide } = require('./calculator');
+
+test('add numbers correctly', () => {
+  assert.strictEqual(add(2, 3), 5);
+});
+
+test('subtract numbers correctly', () => {
+  assert.strictEqual(subtract(10, 4), 6);
+});
+
+test('multiply numbers correctly', () => {
+  assert.strictEqual(multiply(3, 4), 12);
+});
+
+test('divide numbers correctly', () => {
+  assert.strictEqual(divide(10, 2), 5);
+});
+
+test('throws error on division by zero', () => {
+  assert.throws(() => divide(10, 0), /Division by zero/);
+});
+```
+
+Commit and push this to your repository's `main` branch:
+```bash
+git add .
+git commit -m "feat: initial calculator app with seeded bug and test suite"
+git push origin main
+```
 
 ---
 
-### 🌟 Feature 2: The Control Plane Web Dashboard
+## 🔑 Part 3: Connecting GitHub via OAuth & Importing Repositories
 
-**What it tests:** The Next.js 14 real-time dashboard UI.
-
-**How to test:**
-1. Open your browser and go to: **[http://localhost:3000](http://localhost:3000)**.
-2. Observe the main overview:
-   - **Active Tasks & Queue Metrics**.
-   - **Total Completed Pull Requests count**.
-   - **Token Consumption & API Cost estimates**.
-3. Use the left navigation sidebar to explore `/dashboard`, `/projects`, `/tasks`, and `/settings/providers`.
-
-✅ **What you just verified:** The frontend web dashboard is rendered and responsive.
-
----
-
-### 🌟 Feature 3: GitHub Integration & 1-Click Repository Importer
-
-**What it tests:** Connecting your GitHub account, browsing your GitHub repositories live, and importing them into BuildPilot with one click.
-
-**How to test:**
-1. In your browser, navigate to: **[http://localhost:3000/projects](http://localhost:3000/projects)**.
-2. You will see the **"Select & Import GitHub Repositories"** section.
-3. If connected via your token in `.env`, your GitHub username (`@your-username`), avatar, and repositories will load automatically!
-4. Try the **Search Box**: Type the name of any of your repositories to filter in real time.
-5. Click **"Import Repo"** on any repository:
-   - BuildPilot registers the repository as an active Project in MongoDB.
-   - It marks the repository with a green **"Imported"** badge.
-
-*(Alternative Token Connect)*: If you want to connect another account, click the **Token** button at the top right, paste a GitHub Personal Access Token (`ghp_...`), and click **Save & Connect**.
-
-✅ **What you just verified:** Full GitHub account connection, live repository listing, search filtering, and one-click database project importing.
+1. Open your browser and navigate to: **[http://localhost:3000/projects](http://localhost:3000/projects)**.
+2. Click the black **"Authorize with GitHub (OAuth)"** button.
+3. You will be redirected to GitHub's authorization consent screen:
+   - Click **"Authorize BuildPilot"**.
+4. GitHub redirects you back to `http://localhost:3000/projects`.
+5. **Observe**:
+   - Your GitHub avatar and username (e.g. `@your-username`) appear in the top-right header and profile card.
+   - All your public and private repositories are fetched and rendered in the live repository browser!
+6. Type `buildpilot-sandbox-app` in the repository search bar.
+7. Click the **"Import Repo"** button on `buildpilot-sandbox-app`.
+   - BuildPilot registers the project in MongoDB and shows a green **"Imported"** checkmark.
 
 ---
 
-### 🌟 Feature 4: Launching an Autonomous AI Engineering Task (Live Execution!)
+## 🤖 Part 4: 5 Realistic AI Engineering Tasks to Test
 
-**What it tests:** Dispatching a real task to the background worker, streaming live thoughts via Server-Sent Events (SSE), and executing the Multi-Agent loop (Planner $\rightarrow$ Developer $\rightarrow$ Reviewer).
+---
 
-**How to test via Web UI:**
-1. On **[http://localhost:3000/projects](http://localhost:3000/projects)**, find your imported project.
-2. Click **"Start AI Task"** (or click **"Run Task"** on any imported repository).
-3. A modal will pop up. Enter:
-   - **Task Title**: `Fix database connection timeout in pool manager`
-   - **Description**: `Increase default connection timeout from 5s to 15s and add retry logic.`
+### 🧪 Test Task 1: Autonomous Bug Fix with Test Verification
+
+**Objective:** Have the AI Agent locate the seeded bug in `calculator.js`, run tests to confirm the failure, correct the bug, re-run tests until green, and create a Pull Request.
+
+1. On **[http://localhost:3000/projects](http://localhost:3000/projects)**, find your imported `buildpilot-sandbox-app` project.
+2. Click **"Start AI Task"**.
+3. In the modal, enter:
+   - **Task Title**: `Fix divide function bug in calculator.js`
+   - **Description**: `The divide test is failing because divide(10, 2) is returning 20 instead of 5. Please inspect calculator.js, fix the division logic, and run npm test to ensure all 5 tests pass.`
 4. Click **"Dispatch Agent Task"**.
-5. The dashboard will automatically take you to the live Task Detail Page: `http://localhost:3000/tasks/<taskId>`.
-
-**What to observe on the screen:**
-- **Live Timeline**: Watch the stage transition from `QUEUED` $\rightarrow$ `PLANNING` $\rightarrow$ `CODING` $\rightarrow$ `TESTING` $\rightarrow$ `COMPLETED`.
-- **Live Agent Thoughts**: The model explains its reasoning and plan step-by-step.
-- **Terminal 2 (Worker Logs)**: In your terminal running `pnpm run dev`, see the worker process the job with correlation IDs and execute tools.
-
-*(Alternative Test via cURL)*:
-```bash
-curl -s -X POST http://localhost:4000/api/v1/projects/backend-service/tasks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "repositoryId": "repo_demo",
-    "title": "Add rate limiting middleware",
-    "description": "Protect public endpoints against burst requests"
-  }' | jq .
-```
-
-✅ **What you just verified:** Full autonomous task dispatch, Redis BullMQ queue consumption, multi-agent execution, and real-time Server-Sent Events streaming to the browser without page reloads.
+5. **Watch the live execution on `/tasks/<taskId>`**:
+   - **Planner Agent**: Reads `calculator.js` and `calculator.test.js`.
+   - **Developer Agent**: Changes `return a * b` to `return a / b`.
+   - **Reviewer Agent**: Executes `npm test` inside the sandbox, sees all 5 tests passing with exit code 0.
+   - **GitHub Integration**: Pushes branch `buildpilot/task-...` and creates a GitHub Pull Request!
 
 ---
 
-### 🌟 Feature 5: Real-Time Kanban Board & Live Task Filtering
+### 🧪 Test Task 2: New Feature Implementation & Unit Tests
 
-**What it tests:** Real-time state synchronization across tasks in the Kanban board.
+**Objective:** Have the AI Agent implement power and modulo functions, plus unit tests.
 
-**How to test:**
-1. Open **[http://localhost:3000/tasks](http://localhost:3000/tasks)** in your browser.
-2. Observe tasks organized across the finite state columns:
-   - `QUEUED`
-   - `IN PROGRESS (Planning / Coding / Testing)`
-   - `AWAITING APPROVAL`
-   - `COMPLETED`
-3. Test the filters:
-   - Filter by status dropdown.
-   - Search tasks by keyword in the search bar.
-   - Switch between **Kanban View** and **Table View**.
-
-✅ **What you just verified:** 15-state Finite State Machine task tracking, query filters, and live board updates.
+1. Click **"Start AI Task"** on `buildpilot-sandbox-app`.
+2. In the modal, enter:
+   - **Task Title**: `Add power and modulo functions with unit tests`
+   - **Description**: `Add power(base, exponent) and modulo(dividend, divisor) functions to calculator.js and export them. Add comprehensive unit tests in calculator.test.js and run tests to verify.`
+3. Click **"Dispatch Agent Task"**.
+4. Observe the Multi-Agent loop write new code, append tests, and verify 100% test pass rate.
 
 ---
 
-### 🌟 Feature 6: Human-in-the-Loop Approval & High-Risk Tool Gating
+### 🧪 Test Task 3: Security & Input Validation Hardening
 
-**What it tests:** Safety controls where destructive or high-risk actions (e.g. production deploy, database drop, PR merge) pause the workflow in `AWAITING_APPROVAL` until a human clicks Approve.
+**Objective:** Prompt the AI to add strict type checking to reject non-numeric inputs (`NaN`, strings).
 
-**How to test:**
-1. When an agent attempts a `HIGH_RISK` tool, the task state pauses in `AWAITING_APPROVAL`.
-2. Open the task in the web UI. An **Approval Action Card** will appear with:
-   - The requested action name and details.
-   - **Approve** and **Reject** buttons.
-3. Test approving via the API:
-```bash
-curl -s -X POST http://localhost:4000/api/v1/tasks/<TASK_ID>/approvals/<APPROVAL_ID>/decide \
-  -H "Content-Type: application/json" \
-  -d '{
-    "decision": "APPROVED",
-    "userId": "lead_developer",
-    "notes": "Verified diff and approved action"
-  }' | jq .
-```
-4. The worker automatically wakes up from suspension, executes the tool, and completes the run.
-
-✅ **What you just verified:** High-risk permission gating, task suspension, and tamper-evident audit trail.
+1. Click **"Start AI Task"** on `buildpilot-sandbox-app`.
+2. In the modal, enter:
+   - **Task Title**: `Add strict numeric type validation to all calculator functions`
+   - **Description**: `Update all functions to throw a TypeError if any argument is not a finite number. Add tests verifying that invalid inputs throw TypeError.`
+3. Click **"Dispatch Agent Task"**.
+4. Check the generated diff in the live Diff Viewer tab on `/tasks/<taskId>` to review the added validation guards.
 
 ---
 
-### 🌟 Feature 7: Multi-Provider LLM Switching & Connection Testing
+### 🧪 Test Task 4: Testing Human-in-the-Loop Approval Gating
 
-**What it tests:** Changing LLM providers (OpenRouter, Google Gemini, Anthropic Claude, OpenAI GPT-4o, Local Ollama) and verifying live connection health.
+**Objective:** Test safety gating where high-risk actions pause the agent until you approve.
 
-**How to test:**
-1. Open **[http://localhost:3000/settings/providers](http://localhost:3000/settings/providers)** in your browser.
-2. Select a provider from the cards:
-   - **OpenRouter** (Multi-model: Claude 3.5 Sonnet, GPT-4o, DeepSeek-R1)
-   - **Anthropic** (Direct Claude 3.5 Sonnet)
+1. Dispatch a task with a high-risk instruction:
+   - **Task Title**: `Clean up remote stale branches and delete old tags`
+   - **Description**: `Delete obsolete remote git branches.`
+2. The agent will attempt to call a `HIGH_RISK` tool (e.g. branch deletion).
+3. **Observe**:
+   - The task state immediately halts at `AWAITING_APPROVAL`.
+   - An amber **Human Approval Required** action banner appears on the task detail page.
+   - You can inspect the exact tool arguments and risk classification.
+   - Click **Approve** (or **Reject**) to resume the agent workflow.
+
+---
+
+### 🧪 Test Task 5: End-to-End GitHub Webhook Automation (`buildpilot` label $\rightarrow$ PR)
+
+**Objective:** Test fully autonomous intake where opening a GitHub Issue with the `buildpilot` label automatically triggers BuildPilot to write code and open a PR.
+
+1. Go to your repository on GitHub: `https://github.com/<your-username>/buildpilot-sandbox-app/issues/new`.
+2. Create an Issue:
+   - **Title**: `Add square root function to calculator`
+   - **Body**: `Add a sqrt(n) function that returns the square root of a non-negative number and throws on negative numbers. Add tests.`
+   - **Labels**: Add label `buildpilot`.
+3. Submit the issue.
+4. Open **[http://localhost:3000/tasks](http://localhost:3000/tasks)**:
+   - BuildPilot's webhook intake immediately creates the task from the GitHub issue.
+   - The worker starts automatically.
+   - Once completed, look at the GitHub PRs tab on your repo — a Pull Request titled `Fix #1: Add square root function to calculator` is waiting for your review!
+
+---
+
+## 🖥️ Part 5: Testing the Live UI (Dashboard, Kanban, SSE Stream, Diff Viewer)
+
+### 1. Spacious Kanban Board (`/tasks`)
+- Open **[http://localhost:3000/tasks](http://localhost:3000/tasks)**.
+- See your tasks categorized cleanly into 4 spacious columns:
+  - **`📥 Inbox & Queued`**
+  - **`🤖 Active AI Agent`**
+  - **`🛡️ Human Review`**
+  - **`🚀 Completed & PR Created`**
+- Click the **Table View** toggle at top right to switch to list view.
+- Filter by status using the dropdown or search tasks by title.
+
+### 2. Live Task Streaming & Interactive Diff Viewer (`/tasks/[taskId]`)
+- Click on any active or completed task.
+- **SSE Stream**: Watch thoughts and tool executions stream in real-time.
+- **Git Diff Viewer**: Click on the **Diff** tab to see colorized additions (`+`) and deletions (`-`) generated by the AI agent.
+
+### 3. Overview Dashboard (`/dashboard`)
+- Open **[http://localhost:3000/dashboard](http://localhost:3000/dashboard)**.
+- View live KPI cards: Active Tasks, Success Rate, Pull Requests Created, Total Token Consumption.
+- Review the live runtime engine indicators (Docker sandbox, BullMQ worker, SSE engine).
+
+---
+
+## 🧠 Part 6: Testing LLM Provider Switching
+
+BuildPilot supports plug-and-play LLM switching across all major providers.
+
+1. Open **[http://localhost:3000/settings/providers](http://localhost:3000/settings/providers)**.
+2. Switch between providers:
+   - **OpenRouter** (Claude 3.5 Sonnet, GPT-4o, DeepSeek-R1)
    - **Google Gemini** (Gemini 1.5 Pro)
-   - **OpenAI / Ollama / Groq** (Custom Base URLs & Open-Weights models)
-3. Enter or update your API key and click **"Save & Set as Default"**.
-4. Keys are encrypted at rest using AES-256-GCM.
-
-✅ **What you just verified:** Dynamic LLM factory architecture, provider switching with zero code changes, and credential encryption.
-
----
-
-### 🌟 Feature 8: GitHub Webhook Automated Issue Intake
-
-**What it tests:** Automatically converting a real GitHub issue into an internal task and background job when labeled with `buildpilot`.
-
-**How to test:**
-Trigger a simulated GitHub webhook delivery:
-```bash
-curl -s -X POST http://localhost:4000/api/v1/github/webhooks \
-  -H "Content-Type: application/json" \
-  -H "x-github-event: issues" \
-  -H "x-github-delivery: del_demo_99" \
-  -d '{
-    "action": "opened",
-    "issue": {
-      "number": 42,
-      "title": "Optimize SQL indexing on user queries",
-      "body": "Add index on email and createdAt fields for faster login lookup",
-      "labels": [{ "name": "buildpilot" }]
-    },
-    "repository": {
-      "owner": { "login": "my-org" },
-      "name": "core-backend",
-      "full_name": "my-org/core-backend",
-      "default_branch": "main"
-    }
-  }' | jq .
-```
-**Expected Output:**
-```json
-{
-  "received": true,
-  "action": "TASK_CREATED",
-  "taskId": "...",
-  "projectId": "..."
-}
-```
-Open **[http://localhost:3000/tasks](http://localhost:3000/tasks)** — you will see the new task from issue #42 automatically created and executing!
-
-✅ **What you just verified:** Webhook signature verification, issue eligibility filtering, automatic project provisioning, and queue offloading.
+   - **Anthropic** (Direct Claude 3.5 Sonnet)
+   - **OpenAI** (Direct GPT-4o)
+   - **Local Ollama** (`http://localhost:11434/v1` for open-weights models)
+3. Enter your API key and click **"Save & Set as Default"**.
+4. Launch a new task — the worker will immediately utilize your selected model adapter.
 
 ---
 
-### 🌟 Feature 9: SWE-bench Deterministic Coding Benchmark Suite
+## 🔄 Part 7: Testing Failure Recovery & Retry Resiliency
 
-**What it tests:** The evaluation harness containing 20 deterministic coding scenarios with seeded bugs, test suites, and duration/token accounting.
+**Objective:** Test what happens when an agent encounters compile errors or rate limits.
 
-**How to test:**
-Run the benchmark test suite in your terminal:
+1. Dispatch a difficult or deliberately broken task.
+2. If tests fail on Attempt 1, watch the **Self-Healing Loop**:
+   - The Developer Agent receives the stderr output from the test failure.
+   - It analyzes the error trace and generates a second patch (Attempt 2).
+   - Once tests pass, it transitions to `COMPLETED`.
+3. If a task fails or is cancelled, click the **"Retry Task"** button in the UI or use the API:
+   ```bash
+   curl -s -X POST http://localhost:4000/api/v1/tasks/<TASK_ID>/retry | jq .
+   ```
+
+---
+
+## 📊 Part 8: Automated Benchmark Harness & Telemetry
+
+### 1. Run the SWE-bench Benchmark Suite (20 Deterministic Scenarios)
+In your terminal:
 ```bash
 pnpm --filter @buildpilot/benchmark test
 ```
-**Expected Output:**
-```text
- ✓ src/benchmark.test.ts (3 tests)
- Test Files  1 passed (1)
-      Tests  3 passed (3)
-```
+*(Runs evaluations across 20 synthetic coding challenges with seeded bugs).*
 
-✅ **What you just verified:** Reproducible SWE-bench style benchmark dataset and automated test evaluation harness.
-
----
-
-### 🌟 Feature 10: Observability, Tracing & Prometheus Telemetry
-
-**What it tests:** Structured Pino logging with correlation IDs, OpenTelemetry tracing spans, and Prometheus metrics for Grafana.
-
-**How to test:**
-In your terminal, query the Prometheus metrics exporter:
+### 2. Inspect Prometheus Metrics
 ```bash
-curl -s http://localhost:4000/metrics
+curl -s http://localhost:4000/metrics | grep buildpilot
 ```
-**Expected Output:**
-```text
-# HELP buildpilot_tasks_total Total count of processed engineering tasks
-# TYPE buildpilot_tasks_total counter
-buildpilot_tasks_total{status="COMPLETED"} 15
-# HELP buildpilot_token_usage_total Total tokens consumed across LLM providers
-# TYPE buildpilot_token_usage_total counter
-buildpilot_token_usage_total{provider="OPENROUTER",type="prompt"} 42150
-buildpilot_token_usage_total{provider="OPENROUTER",type="completion"} 11200
-```
-
-✅ **What you just verified:** Operational metrics, token accounting, and Prometheus scraping endpoint.
+*(Exposes active task counts, duration histograms, and token consumption by provider).*
 
 ---
 
-### 🌟 Feature 11: Automated Database Backup & Disaster Recovery
+## ✅ Complete Feature Testing Matrix
 
-**What it tests:** Automated snapshot creation of MongoDB collections with gzip compression and retention verification.
-
-**How to test:**
-Run the automated backup script:
-```bash
-bash scripts/backup-mongodb.sh
-```
-**Expected Output:**
-```text
-[INFO] Starting MongoDB backup for buildpilot...
-[INFO] Backup archive created successfully: /tmp/buildpilot-backups/backup_...tar.gz
-[INFO] Backup verification completed successfully
-```
-
-✅ **What you just verified:** Production database snapshotting and disaster recovery readiness.
-
----
-
-## 🎯 Verification Summary Matrix
-
-| # | Feature Tested | Method | Status |
-|---|---|---|---|
-| **1** | System Readiness & Health | `curl http://localhost:4000/ready` | ✅ Tested |
-| **2** | Web Dashboard Navigation | `http://localhost:3000` | ✅ Tested |
-| **3** | GitHub OAuth & Repo Selector | `http://localhost:3000/projects` | ✅ Tested |
-| **4** | Autonomous AI Task Dispatch | Web Modal $\rightarrow$ Live SSE Timeline | ✅ Tested |
-| **5** | Real-Time Kanban Board | `http://localhost:3000/tasks` | ✅ Tested |
-| **6** | Human-in-the-Loop Gating | Approval Card & API | ✅ Tested |
-| **7** | Multi-Provider LLM Setup | `http://localhost:3000/settings/providers` | ✅ Tested |
-| **8** | GitHub Webhook Auto-Intake | Webhook Curl Simulation | ✅ Tested |
-| **9** | Benchmark Harness (20 Tasks) | `pnpm --filter @buildpilot/benchmark test` | ✅ Tested |
-| **10** | Prometheus Telemetry | `curl http://localhost:4000/metrics` | ✅ Tested |
-| **11** | Automated Database Backup | `bash scripts/backup-mongodb.sh` | ✅ Tested |
-
----
-
-### 💡 Need More Details?
-- Read **[MANUAL_TESTING_GUIDE.md](./MANUAL_TESTING_GUIDE.md)** for deep architecture concepts and sequence diagrams for every phase.
-- Read **[MASTER_TODO.md](./MASTER_TODO.md)** for the complete list of all completed roadmap items.
-
+| Feature | Where to Test | Verification Metric | Status |
+| :--- | :--- | :--- | :--- |
+| **1. GitHub OAuth** | `/projects` $\rightarrow$ "Authorize with GitHub" | Redirects to GitHub & loads user avatar + repos | ✅ Verified |
+| **2. Repo Importer** | `/projects` $\rightarrow$ Search & "Import Repo" | MongoDB project created with green "Imported" badge | ✅ Verified |
+| **3. AI Bug Fixing** | `/projects` $\rightarrow$ "Start AI Task" | Fixes `calculator.js`, passes tests, creates PR | ✅ Verified |
+| **4. Multi-Agent Flow** | `/tasks/[taskId]` | Live timeline (Planner $\rightarrow$ Dev $\rightarrow$ Reviewer) | ✅ Verified |
+| **5. Live SSE Stream** | `/tasks/[taskId]` | Real-time reasoning stream without page reloads | ✅ Verified |
+| **6. Diff Viewer** | `/tasks/[taskId]` $\rightarrow$ Diff Tab | Color-coded syntax diff of modified files | ✅ Verified |
+| **7. Spacious Kanban** | `/tasks` | 4 spacious columns with card timers & filters | ✅ Verified |
+| **8. Human Approval** | High-risk tool execution | State halts at `AWAITING_APPROVAL` until decided | ✅ Verified |
+| **9. Webhook Intake** | GitHub issue with `buildpilot` label | Webhook auto-creates task and dispatches worker | ✅ Verified |
+| **10. LLM Switching** | `/settings/providers` | Dynamic provider switching with AES-256 encryption | ✅ Verified |
+| **11. Self-Healing Loop** | Failing test scenario | Agent consumes test stderr and retries up to 3 times | ✅ Verified |
+| **12. Prometheus Metrics**| `curl http://localhost:4000/metrics` | Prometheus counters and histograms exported | ✅ Verified |
