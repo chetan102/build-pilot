@@ -7,9 +7,15 @@ import {
   Table as TableIcon,
   Search,
   RefreshCw,
-  AlertCircle,
+  Plus,
   Clock,
   ExternalLink,
+  GitBranch,
+  Bot,
+  Layers,
+  Sparkles,
+  ArrowRight,
+  Filter,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,7 +31,7 @@ import {
 } from '@/components/ui/table';
 import { fetchTasks, TaskSummary } from '@/lib/api-client';
 import { MOCK_TASKS } from '@/lib/mock-data';
-import { formatDuration } from '@/lib/utils';
+import { formatDuration, formatDate } from '@/lib/utils';
 
 export default function TasksPage() {
   const [viewMode, setViewMode] = React.useState<'kanban' | 'table'>('kanban');
@@ -34,8 +40,6 @@ export default function TasksPage() {
   const [tasks, setTasks] = React.useState<TaskSummary[]>([]);
   const [loading, setLoading] = React.useState<boolean>(true);
   const [isUsingFallback, setIsUsingFallback] = React.useState<boolean>(false);
-  const [page, setPage] = React.useState<number>(1);
-  const [totalPages, setTotalPages] = React.useState<number>(1);
 
   const loadTasks = React.useCallback(async () => {
     setLoading(true);
@@ -43,16 +47,13 @@ export default function TasksPage() {
       const res = await fetchTasks({
         search: searchQuery || undefined,
         status: statusFilter !== 'ALL' ? statusFilter : undefined,
-        page,
-        limit: 50,
+        limit: 100,
       });
 
       if (res.tasks && res.tasks.length > 0) {
         setTasks(res.tasks);
-        setTotalPages(res.totalPages || 1);
         setIsUsingFallback(false);
       } else {
-        // If live DB is empty, use mock fallback so UI demonstrates all states
         setTasks(
           MOCK_TASKS.map((m) => ({
             _id: m.id,
@@ -61,6 +62,7 @@ export default function TasksPage() {
             repositoryId: m.repository,
             issueNumber: m.issueNumber,
             title: m.title,
+            description: m.description,
             status: m.status,
             branch: m.branch,
             createdAt: new Date().toISOString(),
@@ -75,7 +77,6 @@ export default function TasksPage() {
         setIsUsingFallback(true);
       }
     } catch {
-      // Offline fallback
       setTasks(
         MOCK_TASKS.map((m) => ({
           _id: m.id,
@@ -84,6 +85,7 @@ export default function TasksPage() {
           repositoryId: m.repository,
           issueNumber: m.issueNumber,
           title: m.title,
+          description: m.description,
           status: m.status,
           branch: m.branch,
           createdAt: new Date().toISOString(),
@@ -99,7 +101,7 @@ export default function TasksPage() {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, statusFilter, page]);
+  }, [searchQuery, statusFilter]);
 
   React.useEffect(() => {
     loadTasks();
@@ -115,52 +117,90 @@ export default function TasksPage() {
     return matchesSearch && matchesStatus;
   });
 
-  const columns = [
-    { key: 'QUEUED', label: 'Queued', color: 'bg-slate-100 text-slate-700' },
-    { key: 'PLANNING', label: 'Planning', color: 'bg-blue-50 text-blue-700' },
-    { key: 'DEVELOPMENT', label: 'Development', color: 'bg-indigo-50 text-indigo-700' },
-    { key: 'TESTING', label: 'Testing', color: 'bg-amber-50 text-amber-700' },
-    { key: 'AWAITING_APPROVAL', label: 'Approval', color: 'bg-purple-50 text-purple-700' },
-    { key: 'COMPLETED', label: 'Completed', color: 'bg-emerald-50 text-emerald-700' },
+  // Logical 4-column groupings to prevent squeezed narrow columns
+  const kanbanColumns = [
+    {
+      id: 'queued',
+      title: 'Inbox & Queued',
+      description: 'Tasks waiting for worker assignment',
+      color: 'bg-slate-100 text-slate-700 border-slate-200',
+      dotColor: 'bg-slate-400',
+      match: (status: string) => status === 'QUEUED',
+    },
+    {
+      id: 'in_progress',
+      title: 'Active AI Agent',
+      description: 'Planning, editing code & executing tests',
+      color: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+      dotColor: 'bg-indigo-500 animate-pulse',
+      match: (status: string) =>
+        status === 'PLANNING' || status === 'DEVELOPMENT' || status === 'TESTING' || status === 'CODING',
+    },
+    {
+      id: 'approval',
+      title: 'Human Review & Gating',
+      description: 'High-risk actions awaiting developer decision',
+      color: 'bg-amber-50 text-amber-700 border-amber-200',
+      dotColor: 'bg-amber-500',
+      match: (status: string) => status === 'AWAITING_APPROVAL' || status === 'BLOCKED',
+    },
+    {
+      id: 'completed',
+      title: 'Completed & PR Created',
+      description: 'Changes verified and delivered',
+      color: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      dotColor: 'bg-emerald-500',
+      match: (status: string) => status === 'COMPLETED' || status === 'FAILED' || status === 'CANCELLED',
+    },
   ];
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Top Controls Bar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+    <div className="space-y-6 max-w-[1600px] mx-auto pb-12">
+      {/* Header Bar */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-200/80">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Autonomous Task Board</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <Kanban className="h-6 w-6 text-indigo-600" />
+              Autonomous Task Board
+            </h1>
             {isUsingFallback && (
               <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-300 bg-amber-50">
-                Demo Fixture Data
+                Demo Data Mode
               </Badge>
             )}
           </div>
-          <p className="text-xs text-slate-500">
-            Real-time pipeline tracking GitHub issues through execution, verification, and PR delivery
+          <p className="text-xs text-slate-500 mt-0.5">
+            Real-time pipeline tracking engineering tasks through Planner, Developer, and Reviewer loops.
           </p>
         </div>
 
-        {/* View Toggle & Refresh */}
-        <div className="flex items-center gap-2">
+        {/* View Switcher & Action Controls */}
+        <div className="flex items-center gap-2.5">
+          <Link href="/projects">
+            <Button size="sm" className="h-8 text-xs bg-slate-900 hover:bg-slate-800 text-white gap-1.5 shadow-sm">
+              <Plus className="h-3.5 w-3.5" />
+              <span>New Task</span>
+            </Button>
+          </Link>
+
           <Button
             variant="outline"
             size="sm"
             onClick={() => loadTasks()}
             disabled={loading}
-            className="h-8 text-xs gap-1.5"
+            className="h-8 text-xs gap-1.5 bg-white shadow-xs"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin text-blue-500' : 'text-slate-500'}`} />
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin text-indigo-500' : 'text-slate-500'}`} />
             <span>Refresh</span>
           </Button>
 
-          <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
+          <div className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
             <button
               onClick={() => setViewMode('kanban')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all ${
                 viewMode === 'kanban'
-                  ? 'bg-white text-slate-900 shadow-sm'
+                  ? 'bg-white text-slate-900 shadow-xs'
                   : 'text-slate-500 hover:text-slate-900'
               }`}
             >
@@ -169,9 +209,9 @@ export default function TasksPage() {
             </button>
             <button
               onClick={() => setViewMode('table')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all ${
                 viewMode === 'table'
-                  ? 'bg-white text-slate-900 shadow-sm'
+                  ? 'bg-white text-slate-900 shadow-xs'
                   : 'text-slate-500 hover:text-slate-900'
               }`}
             >
@@ -183,80 +223,123 @@ export default function TasksPage() {
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-        <div className="relative w-full sm:w-80">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200/80 shadow-xs">
+        <div className="relative w-full md:w-96">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
           <Input
-            placeholder="Search by title, repo, or #issue..."
+            placeholder="Search by title, repository, or issue #..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 h-9 text-xs"
+            className="pl-9 h-9 text-xs bg-slate-50/50 border-slate-200 focus:bg-white"
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
-          {['ALL', 'QUEUED', 'PLANNING', 'DEVELOPMENT', 'TESTING', 'AWAITING_APPROVAL', 'COMPLETED'].map((status) => (
+        <div className="flex items-center gap-1.5 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+          <Filter className="h-3.5 w-3.5 text-slate-400 ml-1 mr-1 hidden sm:block shrink-0" />
+          {[
+            { key: 'ALL', label: 'All Statuses' },
+            { key: 'QUEUED', label: 'Queued' },
+            { key: 'PLANNING', label: 'Planning' },
+            { key: 'DEVELOPMENT', label: 'Coding' },
+            { key: 'AWAITING_APPROVAL', label: 'Approval' },
+            { key: 'COMPLETED', label: 'Completed' },
+          ].map((f) => (
             <button
-              key={status}
-              onClick={() => setStatusFilter(status)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
-                statusFilter === status
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              key={f.key}
+              onClick={() => setStatusFilter(f.key)}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                statusFilter === f.key
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'bg-slate-100/70 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
               }`}
             >
-              {status === 'ALL' ? 'All Tasks' : status.replace(/_/g, ' ')}
+              {f.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* View: Kanban Board */}
+      {/* View: Spacious Kanban Board */}
       {viewMode === 'kanban' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 items-start">
-          {columns.map((col) => {
-            const tasksInColumn = filteredTasks.filter((t) => t.status === col.key);
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 items-start">
+          {kanbanColumns.map((col) => {
+            const columnTasks = filteredTasks.filter((t) => col.match(t.status));
 
             return (
-              <div key={col.key} className="bg-slate-100/75 rounded-xl p-3 border border-slate-200/80 min-h-[500px] flex flex-col">
+              <div
+                key={col.id}
+                className="bg-slate-100/60 rounded-2xl p-4 border border-slate-200/70 min-h-[550px] flex flex-col"
+              >
                 {/* Column Header */}
                 <div className="flex items-center justify-between mb-3 px-1">
                   <div className="flex items-center gap-2">
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${col.color}`}>
-                      {col.label}
-                    </span>
+                    <span className={`h-2 w-2 rounded-full ${col.dotColor}`} />
+                    <h2 className="text-xs font-bold text-slate-800 tracking-tight uppercase">
+                      {col.title}
+                    </h2>
                   </div>
-                  <span className="text-xs font-semibold text-slate-400 bg-white px-2 py-0.5 rounded-full border border-slate-200">
-                    {tasksInColumn.length}
+                  <span className="text-xs font-bold text-slate-500 bg-white px-2 py-0.5 rounded-full border border-slate-200 shadow-xs">
+                    {columnTasks.length}
                   </span>
                 </div>
 
-                {/* Cards */}
-                <div className="space-y-3 flex-1">
-                  {tasksInColumn.map((task) => {
+                {/* Cards Container */}
+                <div className="space-y-3.5 flex-1">
+                  {columnTasks.map((task) => {
                     const taskId = task._id || task.id;
                     return (
-                      <Link key={taskId} href={`/tasks/${taskId}`}>
-                        <Card className="hover:border-blue-300 hover:shadow-md transition-all cursor-pointer bg-white border-slate-200">
-                          <CardContent className="p-3.5 space-y-2.5">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[11px] font-mono font-semibold text-slate-400">
+                      <Link key={taskId} href={`/tasks/${taskId}`} className="block group">
+                        <Card className="bg-white border-slate-200/90 shadow-xs hover:shadow-md hover:border-indigo-300 transition-all cursor-pointer rounded-xl overflow-hidden">
+                          <CardContent className="p-4 space-y-3">
+                            {/* Card Top: Issue number & Repo tag */}
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 text-[11px]">
                                 #{task.issueNumber || 1}
                               </span>
-                              <span className="text-[10px] text-slate-400 font-medium truncate max-w-[120px]">
-                                {task.repositoryId?.split('/')[1] || task.repositoryId || 'repo'}
+                              <span className="text-[11px] font-medium text-slate-500 truncate max-w-[150px]" title={task.repositoryId}>
+                                {task.repositoryId}
                               </span>
                             </div>
 
-                            <h3 className="font-semibold text-xs text-slate-900 leading-snug line-clamp-2 hover:text-blue-600 transition-colors">
+                            {/* Card Title */}
+                            <h3 className="font-bold text-xs text-slate-900 leading-snug group-hover:text-indigo-600 transition-colors line-clamp-2">
                               {task.title}
                             </h3>
 
-                            <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                              <span className="truncate max-w-[90px]">{task.model?.split('/')[1] || task.model || 'claude-3.5-sonnet'}</span>
-                              <span className="font-medium text-slate-600">
-                                {task.durationMs ? formatDuration(task.durationMs) : '0s'}
+                            {/* Status and Model Tag */}
+                            <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                              <Badge
+                                variant={
+                                  task.status === 'COMPLETED'
+                                    ? 'success'
+                                    : task.status === 'AWAITING_APPROVAL'
+                                      ? 'destructive'
+                                      : task.status === 'PLANNING' || task.status === 'DEVELOPMENT'
+                                        ? 'info'
+                                        : 'secondary'
+                                }
+                                className="text-[10px] px-2 py-0.5 font-bold"
+                              >
+                                {task.status.replace(/_/g, ' ')}
+                              </Badge>
+
+                              {task.branch && (
+                                <span className="text-slate-400 font-mono text-[10px] truncate max-w-[130px] flex items-center gap-0.5">
+                                  <GitBranch className="h-2.5 w-2.5 shrink-0" />
+                                  {task.branch}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Card Footer: Model + Runtime */}
+                            <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                              <span className="truncate max-w-[120px] font-medium text-slate-500">
+                                {task.model?.split('/')[1] || task.model || 'claude-3.5-sonnet'}
                               </span>
+                              <div className="flex items-center gap-1 font-semibold text-slate-600">
+                                <Clock className="h-3 w-3 text-slate-400" />
+                                <span>{task.durationMs ? formatDuration(task.durationMs) : '0s'}</span>
+                              </div>
                             </div>
                           </CardContent>
                         </Card>
@@ -264,9 +347,9 @@ export default function TasksPage() {
                     );
                   })}
 
-                  {tasksInColumn.length === 0 && (
-                    <div className="h-28 rounded-lg border-2 border-dashed border-slate-200 flex items-center justify-center text-xs text-slate-400">
-                      Empty
+                  {columnTasks.length === 0 && (
+                    <div className="h-32 rounded-xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center text-xs text-slate-400 gap-1 bg-white/40">
+                      <span>No tasks in this stage</span>
                     </div>
                   )}
                 </div>
@@ -276,49 +359,59 @@ export default function TasksPage() {
         </div>
       ) : (
         /* View: Table */
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
           <Table>
-            <TableHeader>
+            <TableHeader className="bg-slate-50/80">
               <TableRow>
-                <TableHead className="w-16">Issue</TableHead>
-                <TableHead>Task Title & Repository</TableHead>
-                <TableHead className="w-36">Status</TableHead>
-                <TableHead className="w-40">Model / Provider</TableHead>
-                <TableHead className="w-28">Runtime</TableHead>
-                <TableHead className="w-24 text-right">Action</TableHead>
+                <TableHead className="w-20 font-bold text-xs">Issue</TableHead>
+                <TableHead className="font-bold text-xs">Task Title & Details</TableHead>
+                <TableHead className="w-40 font-bold text-xs">Stage Status</TableHead>
+                <TableHead className="w-48 font-bold text-xs">Model & Branch</TableHead>
+                <TableHead className="w-32 font-bold text-xs">Runtime</TableHead>
+                <TableHead className="w-24 text-right font-bold text-xs">Inspect</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredTasks.map((task) => {
                 const taskId = task._id || task.id;
                 return (
-                  <TableRow key={taskId}>
-                    <TableCell className="font-mono font-bold text-xs text-slate-500">
+                  <TableRow key={taskId} className="hover:bg-slate-50/70 transition-colors">
+                    <TableCell className="font-mono font-bold text-xs text-indigo-600">
                       #{task.issueNumber || 1}
                     </TableCell>
                     <TableCell>
                       <Link
                         href={`/tasks/${taskId}`}
-                        className="font-semibold text-slate-900 hover:text-blue-600 transition-colors block text-xs"
+                        className="font-bold text-xs text-slate-900 hover:text-indigo-600 transition-colors block"
                       >
                         {task.title}
                       </Link>
-                      <span className="text-[11px] text-slate-400">{task.repositoryId} · {task.branch}</span>
+                      <span className="text-[11px] text-slate-400">{task.repositoryId}</span>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={task.status === 'COMPLETED' ? 'success' : task.status === 'AWAITING_APPROVAL' ? 'warning' : 'default'}>
+                      <Badge
+                        variant={
+                          task.status === 'COMPLETED'
+                            ? 'success'
+                            : task.status === 'AWAITING_APPROVAL'
+                              ? 'destructive'
+                              : 'default'
+                        }
+                        className="text-[10px] font-bold"
+                      >
                         {task.status.replace(/_/g, ' ')}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-xs text-slate-600 font-mono">
-                      {task.model || 'anthropic/claude-3.5-sonnet'}
+                    <TableCell className="text-xs text-slate-600">
+                      <p className="font-medium text-[11px] text-slate-700">{task.model || 'claude-3.5-sonnet'}</p>
+                      <p className="text-[10px] text-slate-400 font-mono">{task.branch}</p>
                     </TableCell>
                     <TableCell className="text-xs text-slate-500 font-medium">
                       {task.durationMs ? formatDuration(task.durationMs) : '0s'}
                     </TableCell>
                     <TableCell className="text-right">
                       <Link href={`/tasks/${taskId}`}>
-                        <Button variant="outline" size="sm" className="text-xs h-7 px-2">
+                        <Button variant="outline" size="sm" className="text-xs h-7 px-2.5">
                           Inspect
                         </Button>
                       </Link>
