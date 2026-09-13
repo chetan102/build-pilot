@@ -13,7 +13,7 @@ import {
   providerCredentialRepository,
 } from '@buildpilot/database';
 import { taskQueueManager } from '../queue.js';
-import { TaskStatus, LLMProviderType } from '@buildpilot/domain';
+import { TaskStatus, LLMProviderType, LLMProviderKind } from '@buildpilot/domain';
 import { createLogger } from '@buildpilot/observability';
 
 const logger = createLogger({ serviceName: 'github-webhook-router' });
@@ -109,12 +109,12 @@ webhooksRouter.post(
         const runId = new mongoose.Types.ObjectId().toString();
 
         // Dynamically resolve active provider credentials configured by user
-        let webhookProvider: LLMProviderType = LLMProviderType.OPENROUTER;
+        let webhookProvider: LLMProviderKind = LLMProviderType.OPENROUTER;
         let webhookModel: string = 'anthropic/claude-3.5-sonnet';
         try {
           const activeCred = await providerCredentialRepository.findActiveProvider('default-user');
           if (activeCred) {
-            webhookProvider = activeCred.provider as LLMProviderType;
+            webhookProvider = activeCred.provider as LLMProviderKind;
             webhookModel = activeCred.defaultModel || webhookModel;
           }
         } catch {

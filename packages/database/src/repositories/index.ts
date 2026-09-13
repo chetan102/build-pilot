@@ -7,3 +7,4 @@ export * from './agent-step.repository.js';
 export * from './tool-call.repository.js';
 export * from './approval.repository.js';
 export * from './provider-credential.repository.js';
+export * from './repository-knowledge.repository.js';

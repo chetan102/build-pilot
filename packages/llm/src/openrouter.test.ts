@@ -99,7 +99,13 @@ describe('OpenRouterProvider Adapter', () => {
     expect(sentBody.messages).toHaveLength(2);
     expect(sentBody.messages[0]).toEqual({
       role: 'system',
-      content: 'You are an AI coding assistant.',
+      content: [
+        {
+          type: 'text',
+          text: 'You are an AI coding assistant.',
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
     });
     expect(sentBody.messages[1]).toEqual({
       role: 'user',

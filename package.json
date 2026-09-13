@@ -9,7 +9,7 @@
   "scripts": {
     "build": "turbo run build",
     "build:web": "turbo run build --filter=@buildpilot/web",
-    "dev": "turbo run dev --parallel",
+    "dev": "turbo run dev --filter=@buildpilot/web --filter=@buildpilot/api --filter=@buildpilot/worker --ui=stream",
     "dev:web": "pnpm --filter @buildpilot/web dev",
     "dev:api": "pnpm --filter @buildpilot/api dev",
     "dev:worker": "pnpm --filter @buildpilot/worker dev",

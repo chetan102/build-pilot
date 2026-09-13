@@ -201,8 +201,8 @@ describe('End-to-End Vertical Slice (Phase 10: Issue → Code Fix → Tests → 
       expect.objectContaining({ completedRunId: '6a9cf2425d9b845db6781a19' }),
     );
 
-    // Verify all 5 steps recorded in DB
-    expect(mockStepRepo.create).toHaveBeenCalledTimes(5);
+    // Verify all 4 steps recorded in DB (search_code -> write_file -> run_tests -> create_pull_request auto-completion)
+    expect(mockStepRepo.create).toHaveBeenCalledTimes(4);
 
     // Verify 4 tool calls executed and recorded
     expect(mockToolCallRepo.create).toHaveBeenCalledTimes(4);

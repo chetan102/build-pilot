@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { gitHubService } from '@buildpilot/github';
 import { projectRepository, repositoryRepository, taskRepository, eventRepository, providerCredentialRepository } from '@buildpilot/database';
 import { taskQueueManager } from '../queue.js';
-import { TaskStatus, LLMProviderType } from '@buildpilot/domain';
+import { TaskStatus, LLMProviderType, LLMProviderKind } from '@buildpilot/domain';
 import { secretsManager } from '@buildpilot/shared';
 import { createLogger } from '@buildpilot/observability';
 import { webhooksRouter } from './webhooks.router.js';
@@ -109,6 +109,13 @@ githubRouter.get('/oauth/callback', async (req: Request, res: Response, next: Ne
       github_user: userProfile.login,
       github_avatar: userProfile.avatarUrl,
       github_name: userProfile.name || userProfile.login,
+    });
+
+    res.cookie('bp_session', tokenResult.accessToken, {
+      httpOnly: false,
+      sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      path: '/',
     });
 
     return res.redirect(`${appUrl}/projects?${redirectParams.toString()}`);
@@ -229,7 +236,8 @@ githubRouter.get('/repos', async (req: Request, res: Response, next: NextFunctio
  */
 githubRouter.get('/repos/:owner/:repo/issues', async (req: Request, res: Response) => {
   try {
-    const { owner, repo } = req.params;
+    const owner = String(req.params.owner);
+    const repo = String(req.params.repo);
     const token = (req.query.token as string) || extractGitHubToken(req);
 
     const issues = await gitHubService.listRepositoryIssues(owner, repo, token);
@@ -252,10 +260,12 @@ githubRouter.get('/repos/:owner/:repo/issues', async (req: Request, res: Respons
  */
 githubRouter.post('/repos/:owner/:repo/sync-issues', async (req: Request, res: Response) => {
   try {
-    const { owner, repo } = req.params;
+    const owner = String(req.params.owner);
+    const repo = String(req.params.repo);
     const token = (req.body.token as string) || extractGitHubToken(req);
     const repoFullName = `${owner}/${repo}`;
     const tagFilter = (req.body.tag as string) || 'buildpilot';
+    const createdTasks: any[] = [];
 
     const allIssues = await gitHubService.listRepositoryIssues(owner, repo, token);
     const eligibleIssues = allIssues.filter((issue) => {
@@ -278,12 +288,12 @@ githubRouter.post('/repos/:owner/:repo/sync-issues', async (req: Request, res: R
 
     const projectId = (project as any)._id?.toString() || projectSlug;
     // Resolve active provider from database if configured by user
-    let defaultProvider: LLMProviderType = LLMProviderType.OPENROUTER;
+    let defaultProvider: LLMProviderKind = LLMProviderType.OPENROUTER;
     let defaultModel: string = 'anthropic/claude-3.5-sonnet';
     try {
       const activeCred = await providerCredentialRepository.findActiveProvider('default-user');
       if (activeCred) {
-        defaultProvider = activeCred.provider as LLMProviderType;
+        defaultProvider = activeCred.provider as LLMProviderKind;
         defaultModel = activeCred.defaultModel || defaultModel;
       }
     } catch {
@@ -297,12 +307,12 @@ githubRouter.post('/repos/:owner/:repo/sync-issues', async (req: Request, res: R
         // If task is still in QUEUED state (e.g. was queued before worker started or recovered), re-enqueue it
         if (existingTask.status === TaskStatus.QUEUED) {
           const runId = new mongoose.Types.ObjectId().toString();
-          const taskId = (existingTask as any)._id?.toString() || existingTask.id;
+          const taskId = (existingTask as any)._id?.toString() || (existingTask as any).id;
           const meta = (existingTask.metadata as Record<string, any>) || {};
 
           // Update token in metadata if new token supplied
           if (token && meta.githubToken !== token) {
-            await taskRepository.updateMetadata(taskId, { ...meta, githubToken: token });
+            await taskRepository.update(taskId, { metadata: { ...meta, githubToken: token } });
           }
 
           await taskQueueManager.enqueueTask({
@@ -330,6 +340,21 @@ githubRouter.post('/repos/:owner/:repo/sync-issues', async (req: Request, res: R
       }
 
       const branchName = `buildpilot/task-${issue.number}-${Date.now().toString(36)}`;
+
+      // Parse dependency references from issue body (e.g. "Depends on: #1", "After: #2")
+      const depMatch = (issue.body || '').match(/(?:depends on|after|requires|blocked by):?\s*#(\d+)/i);
+      let parentTaskId: string | undefined;
+      const dependsOn: string[] = [];
+
+      if (depMatch && depMatch[1]) {
+        const depIssueNum = parseInt(depMatch[1], 10);
+        const depTask = await taskRepository.findByRepoAndIssue(repoFullName, depIssueNum);
+        if (depTask) {
+          parentTaskId = (depTask as any)._id?.toString();
+          dependsOn.push((depTask as any)._id?.toString());
+        }
+      }
+
       const task = await taskRepository.create({
         projectId,
         repositoryId: repoFullName,
@@ -339,6 +364,8 @@ githubRouter.post('/repos/:owner/:repo/sync-issues', async (req: Request, res: R
         status: TaskStatus.QUEUED,
         branch: branchName,
         baseBranch: 'main',
+        parentTaskId,
+        dependsOn,
         tags: ['github', 'sync', tagFilter],
         metadata: {
           source: 'GITHUB_SYNC',
@@ -346,6 +373,7 @@ githubRouter.post('/repos/:owner/:repo/sync-issues', async (req: Request, res: R
           githubToken: token || undefined,
           provider: defaultProvider,
           model: defaultModel,
+          parentTaskId,
         },
       });
 
@@ -369,6 +397,7 @@ githubRouter.post('/repos/:owner/:repo/sync-issues', async (req: Request, res: R
           githubToken: token || undefined,
           provider: defaultProvider,
           model: defaultModel,
+          parentTaskId,
         },
       });
 

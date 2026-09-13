@@ -138,6 +138,13 @@ export class TaskRepository {
     };
   }
 
+  async update(id: string, data: Partial<ITask>): Promise<ITask | null> {
+    if (!mongoose.isValidObjectId(id)) {
+      return null;
+    }
+    return TaskModel.findByIdAndUpdate(id, { $set: data }, { new: true }).exec();
+  }
+
   async updateStatus(
     id: string,
     status: TaskStatusType,

@@ -3,6 +3,76 @@ import { createLogger, Logger } from '@buildpilot/observability';
 
 const defaultLogger = createLogger({ serviceName: 'failure-recovery' });
 
+// ---------------------------------------------------------------------------
+// Fatal tool result detection
+// ---------------------------------------------------------------------------
+
+export interface ToolResultAnalysis {
+  isFatal: boolean;
+  reason: string;
+}
+
+/**
+ * Exit codes that indicate the environment is broken — not a transient error.
+ * 127 = command not found, 126 = permission denied / not executable.
+ */
+const FATAL_EXIT_CODES = new Set([127, 126]);
+
+/**
+ * String patterns in stdout/stderr that indicate an unrecoverable error.
+ * Any match triggers immediate task failure — no retries.
+ */
+const FATAL_OUTPUT_PATTERNS = [
+  'command not found',
+  'invalid api key',
+  'authentication failed',
+  'insufficient_quota',
+  'out of credits',
+  'free-models-per-day',
+  'add credits',
+  'unlock 1000',
+  'no ai api key',
+];
+
+/**
+ * Classifies a tool's result as fatal or non-fatal.
+ *
+ * Fatal results trigger immediate task FAILED — no retry, no model panic loop.
+ * This prevents the agent from burning tokens searching for a missing binary,
+ * or retrying when the API key/quota is exhausted.
+ */
+export function analyzeToolResult(toolName: string, result: unknown): ToolResultAnalysis {
+  if (!result || typeof result !== 'object') return { isFatal: false, reason: '' };
+
+  const r = result as Record<string, any>;
+
+  // exit 127/126 → environment broken, model cannot fix this
+  if (typeof r.exitCode === 'number' && FATAL_EXIT_CODES.has(r.exitCode)) {
+    const detail = (r.stderr || r.stdout || '').toString().slice(0, 200);
+    return {
+      isFatal: true,
+      reason: `Tool '${toolName}' returned fatal exit code ${r.exitCode}: ${detail}`,
+    };
+  }
+
+  // Check all text fields for fatal auth/quota patterns
+  const combined = [r.stderr, r.stdout, r.error, r.message]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  for (const pattern of FATAL_OUTPUT_PATTERNS) {
+    if (combined.includes(pattern.toLowerCase())) {
+      return {
+        isFatal: true,
+        reason: `Tool '${toolName}' hit unrecoverable condition: "${pattern}"`,
+      };
+    }
+  }
+
+  return { isFatal: false, reason: '' };
+}
+
 export interface RetryOptions {
   maxRetries?: number;
   initialDelayMs?: number;

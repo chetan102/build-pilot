@@ -33,6 +33,8 @@ export interface RepoContext {
     dependencies?: Record<string, string>;
     scripts?: Record<string, string>;
   };
+  architectureSummary?: string;
+  pastLearnings?: string[];
 }
 
 export interface TokenBudgetOptions {
@@ -67,6 +69,16 @@ export interface TokenBudgetOptions {
   maxFileTreeTokens: number;
 }
 
+export interface ReadFileEntry {
+  lines: number;
+  step: number;
+}
+
+export interface SandboxCapabilities {
+  gitAvailable: boolean;
+  nodeAvailable: boolean;
+}
+
 export interface ContextBuildOptions {
   task: TaskContext;
   repo?: RepoContext;
@@ -74,6 +86,10 @@ export interface ContextBuildOptions {
   systemPromptOverride?: string;
   customGuidelines?: string;
   tokenBudget?: Partial<TokenBudgetOptions>;
+  /** Files the agent has already read this session — injected as a dedup header */
+  readFiles?: Map<string, ReadFileEntry>;
+  /** Pre-flight sandbox capability check result */
+  sandboxCapabilities?: SandboxCapabilities;
 }
 
 export interface ContextBuildResult {

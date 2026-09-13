@@ -17,6 +17,9 @@ export interface ITask {
   prUrl?: string;
   prNumber?: number;
   activeApprovalId?: string;
+  parentTaskId?: string;
+  dependsOn?: string[];
+  priority?: number;
   tags: string[];
   metadata?: Record<string, unknown>;
   createdAt?: Date;
@@ -44,6 +47,9 @@ export const TaskSchema = new Schema<ITask>(
     prUrl: { type: String },
     prNumber: { type: Number },
     activeApprovalId: { type: String },
+    parentTaskId: { type: String, index: true },
+    dependsOn: { type: [String], default: [] },
+    priority: { type: Number, default: 10 },
     tags: { type: [String], default: [] },
     metadata: { type: Schema.Types.Mixed, default: {} },
   },

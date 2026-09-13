@@ -369,30 +369,42 @@ export default function TaskDetailPage() {
       </div>
 
       {/* Task Meta Details Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="p-3.5 bg-white rounded-xl border border-slate-200 text-xs">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs">
           <span className="text-slate-400 block mb-1">Git Task Branch</span>
           <span className="font-mono font-semibold text-slate-800 text-[11px] truncate block">
             {task.branch}
           </span>
         </div>
-        <div className="p-3.5 bg-white rounded-xl border border-slate-200 text-xs">
+        <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs">
           <span className="text-slate-400 block mb-1">LLM Model & Provider</span>
-          <span className="font-semibold text-slate-800 truncate block">
+          <span className="font-semibold text-slate-800 truncate block text-[11px]">
             {task.provider || runs[0]?.provider || (task as any).metadata?.provider || 'OPENROUTER'} ·{' '}
             {task.model || runs[0]?.model || (task as any).metadata?.model || 'Configured Model'}
           </span>
         </div>
-        <div className="p-3.5 bg-white rounded-xl border border-slate-200 text-xs">
+        <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs">
           <span className="text-slate-400 block mb-1">Execution Duration</span>
           <span className="font-semibold text-slate-800">
             {task.durationMs ? formatDuration(task.durationMs) : isRunning ? 'In Progress...' : '0s'}
           </span>
         </div>
-        <div className="p-3.5 bg-white rounded-xl border border-slate-200 text-xs">
-          <span className="text-slate-400 block mb-1">Total Steps Recorded</span>
+        <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs">
+          <span className="text-slate-400 block mb-1">Steps & Events</span>
           <span className="font-semibold text-slate-800">
-            {steps.length} steps ({events.length} real-time events)
+            {steps.length} steps ({events.length} events)
+          </span>
+        </div>
+        <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs">
+          <span className="text-slate-400 block mb-1">Token Usage & Cost</span>
+          <span className="font-semibold text-indigo-600 block">
+            {(() => {
+              const runTokens = runs[0]?.output?.totalTokens;
+              const totalTok = runTokens?.totalTokens || steps.reduce((sum, s) => sum + (s.tokenUsage?.totalTokens || 0), 0);
+              if (!totalTok) return isRunning ? 'Tracking...' : '0 tokens';
+              const cost = ((totalTok / 1000) * 0.0025).toFixed(3);
+              return `${totalTok.toLocaleString()} tok (~$${cost})`;
+            })()}
           </span>
         </div>
       </div>
@@ -968,6 +980,72 @@ export default function TaskDetailPage() {
                   </p>
                 </div>
               </div>
+
+              {/* Test Delta / Smart Baseline Verification Breakdown (Phase 3) */}
+              {(runs[0] as any)?.testDelta && (() => {
+                const testDelta = (runs[0] as any).testDelta;
+                const regressions: string[] = testDelta?.regressions || [];
+                const fixed: string[] = testDelta?.fixed || [];
+                const preExisting: string[] = testDelta?.preExisting || [];
+                const newTests: string[] = testDelta?.newTests || [];
+                return (
+                  <div className="p-4 bg-slate-900 text-slate-200 rounded-xl border border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                      <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-emerald-400" />
+                        Smart Baseline Test Delta Analysis
+                      </span>
+                      <Badge
+                        variant={testDelta.verdict === 'PASS' ? 'success' : 'destructive'}
+                        className="text-[10px]"
+                      >
+                        {testDelta.verdict === 'PASS'
+                          ? '0 Regressions (Verified Safe)'
+                          : `${regressions.length} Regression(s)`}
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                      <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
+                        <span className="text-slate-400 text-[10px] block">Regressions</span>
+                        <span
+                          className={`text-base font-bold ${
+                            regressions.length === 0
+                              ? 'text-emerald-400'
+                              : 'text-red-400'
+                          }`}
+                        >
+                          {regressions.length}
+                        </span>
+                      </div>
+                      <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
+                        <span className="text-slate-400 text-[10px] block">Tests Fixed</span>
+                        <span className="text-base font-bold text-emerald-400">
+                          {fixed.length}
+                        </span>
+                      </div>
+                      <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
+                        <span className="text-slate-400 text-[10px] block">Pre-Existing</span>
+                        <span className="text-base font-bold text-amber-400">
+                          {preExisting.length}
+                        </span>
+                      </div>
+                      <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
+                        <span className="text-slate-400 text-[10px] block">New Tests Added</span>
+                        <span className="text-base font-bold text-blue-400">
+                          {newTests.length}
+                        </span>
+                      </div>
+                    </div>
+
+                    {preExisting.length > 0 && (
+                      <p className="text-[11px] text-amber-300/90 font-sans">
+                        ⚠️ Note: {preExisting.length} pre-existing failure(s) were already broken before agent intervention ({preExisting.join(', ')}). These were excluded from regression scoring.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Display actual test tool executions */}
               {testToolCalls.length > 0 ? (

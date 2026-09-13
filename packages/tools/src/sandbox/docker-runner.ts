@@ -96,7 +96,7 @@ export class DockerSandboxRunner {
     }
 
     const dockerArgs = this.buildDockerArgs(options);
-    const { timeoutMs = 60000, maxOutputBytes = 500 * 1024, signal } = options;
+    const { timeoutMs = 60000, maxOutputBytes = 50 * 1024, signal } = options;
     const startTime = Date.now();
 
     return new Promise((resolve) => {

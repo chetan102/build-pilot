@@ -20,7 +20,8 @@ import { AgentStepStage, ToolCallStatus, TaskStatus } from '@buildpilot/domain';
 import { createLogger, Logger } from '@buildpilot/observability';
 import { ContextBuilder, contextBuilder as defaultContextBuilder } from './context-builder.js';
 import { TaskContext, RepoContext, TokenBudgetOptions } from './types.js';
-import { retryWithBackoff, LoopDetector, RetryOptions } from './failure-recovery.js';
+import { retryWithBackoff, LoopDetector, RetryOptions, analyzeToolResult } from './failure-recovery.js';
+import { ReadFileEntry, SandboxCapabilities } from './types.js';
 
 export interface AgentLoopOptions {
   model?: string;
@@ -38,6 +39,8 @@ export interface AgentLoopOptions {
   eventRepository?: EventRepository;
   taskRunRepository?: TaskRunRepository;
   taskRepository?: TaskRepository;
+  /** Pre-flight sandbox environment check (git/node availability) */
+  sandboxCapabilities?: SandboxCapabilities;
 }
 
 export interface AgentLoopResult {
@@ -75,7 +78,13 @@ export class AgentCoreLoop {
     repo: RepoContext | undefined,
     provider: LLMProvider,
     tools: ToolRegistry,
-    runtimeOptions?: { model?: string; maxSteps?: number; workspaceDir?: string; signal?: AbortSignal },
+    runtimeOptions?: {
+      model?: string;
+      maxSteps?: number;
+      workspaceDir?: string;
+      signal?: AbortSignal;
+      sandboxCapabilities?: SandboxCapabilities;
+    },
   ): Promise<AgentLoopResult> {
     const startTime = Date.now();
     const model = runtimeOptions?.model || this.options.model || (provider as any).config?.defaultModel || 'gpt-4o';
@@ -92,9 +101,18 @@ export class AgentCoreLoop {
       totalTokens: 0,
     };
 
-    const history: LLMMessage[] = [];
+    const history: LLMMessage[] = [
+      this.contextBuilder.buildInitialUserMessage(task),
+    ];
     let currentStepIndex = 0;
     let finalAnswer: string | undefined;
+
+    // Track files read this session for dedup injection into system prompt
+    const readFileTracker: Map<string, ReadFileEntry> = new Map();
+    // Count consecutive steps with no write_file — stall detection
+    let stepsSinceLastWrite = 0;
+    const STALL_THRESHOLD = 6; // kill the loop if agent reads/explores for 6 steps without writing
+    const sandboxCapabilities = runtimeOptions?.sandboxCapabilities || this.options.sandboxCapabilities;
 
     this.logger.info(
       { taskId: task.taskId, runId: task.runId, model, maxSteps, workspaceDir },
@@ -154,6 +172,8 @@ export class AgentCoreLoop {
         repo,
         history,
         tokenBudget: this.options.tokenBudget,
+        readFiles: readFileTracker,
+        sandboxCapabilities,
       });
 
       const availableLLMTools = tools.toLLMTools();
@@ -260,6 +280,9 @@ export class AgentCoreLoop {
         content: response.content,
         toolCalls: response.toolCalls,
       });
+      // Buffer for loop-detection warnings — must be pushed AFTER all tool responses
+      // in this turn to avoid interleaving user messages between tool results (HTTP 400).
+      let pendingWarnings: string[] = [];
 
       for (const toolCall of response.toolCalls) {
         const toolStartTime = Date.now();
@@ -345,32 +368,94 @@ export class AgentCoreLoop {
           });
 
           if (loopCheck.shouldWarn) {
-            history.push({
-              role: 'user',
-              content: `[SYSTEM WARNING]: Tool '${toolCall.name}' with identical arguments has failed 3 times. Please try a different approach or fix the argument format.`,
-            });
+            pendingWarnings.push(`[SYSTEM WARNING]: Tool '${toolCall.name}' with identical arguments has failed 3 times. Please try a different approach or fix the argument format.`);
           }
           continue;
         }
 
-        // Execute tool with per-tool timeout
-        this.logger.info({ tool: toolCall.name, args: toolCall.arguments }, 'Executing tool');
+        // ── Tool Execution ──────────────────────────────────────────────────
+        let isIntercepted = false;
+        let toolResult: unknown;
+
+        if (toolCall.name === 'list_files') {
+          const cachedList = readFileTracker.get('__list_files__');
+          if (cachedList && cachedList.step < currentStepIndex) {
+            isIntercepted = true;
+            toolResult = {
+              cached: true,
+              message: `[Cached: Directory file listing was already provided in Step ${cachedList.step}. Refer to your context window.]`,
+            };
+          }
+        }
+
+        // Execute tool with per-tool timeout (or use intercepted result)
+        this.logger.info({ tool: toolCall.name, args: toolCall.arguments, isIntercepted }, 'Executing tool');
         try {
-          const toolResult = await this.executeToolWithTimeout(
-            toolDef,
-            validation.data,
-            {
-              workspaceDir,
-              taskId: task.taskId,
-              runId: task.runId,
-              signal,
-            },
-            perToolTimeoutMs,
-          );
+          if (!isIntercepted) {
+            toolResult = await this.executeToolWithTimeout(
+              toolDef,
+              validation.data,
+              {
+                workspaceDir,
+                taskId: task.taskId,
+                runId: task.runId,
+                signal,
+              },
+              perToolTimeoutMs,
+            );
+          }
 
           const toolDurationMs = Date.now() - toolStartTime;
           loopDetector.recordCall(toolCall.name, toolCall.arguments, true);
+
+          // ── Fatal tool result check ──────────────────────────────────────
+          // If the result contains a fatal pattern (exit 127, auth error, etc.)
+          // fail the task immediately — do NOT let the model panic-loop.
+          const fatalCheck = analyzeToolResult(toolCall.name, toolResult);
+          if (fatalCheck.isFatal) {
+            this.logger.error(
+              { tool: toolCall.name, reason: fatalCheck.reason },
+              'Fatal tool result detected — failing task immediately (no retry)',
+            );
+            await this.updateToolCallState(toolCallDbId, ToolCallStatus.FAILED, toolResult as any, fatalCheck.reason, toolDurationMs);
+            await this.recordFailureEvent(task, currentStepIndex, fatalCheck.reason, Date.now() - startTime);
+            return {
+              success: false,
+              blocked: true,
+              error: `Fatal tool error: ${fatalCheck.reason}`,
+              totalSteps: currentStepIndex,
+              totalTokens: accumulatedUsage,
+              durationMs: Date.now() - startTime,
+            };
+          }
+
           await this.updateToolCallState(toolCallDbId, ToolCallStatus.SUCCESS, toolResult as any, undefined, toolDurationMs);
+
+          // ── Read-file dedup tracker & Post-Write Cache Update ────────────
+          // Track every file successfully read or written so we can intercept
+          // redundant re-reads in subsequent steps.
+          if (toolCall.name === 'read_file' && toolResult && typeof toolResult === 'object') {
+            const r = toolResult as Record<string, any>;
+            const filePath = r.path || (toolCall.arguments as any)?.path;
+            const lines = r.totalLines ?? r.lines ?? 0;
+            if (filePath && !isIntercepted) {
+              readFileTracker.set(filePath, { lines, step: currentStepIndex });
+            }
+          }
+          // When a file is written, record it in readFileTracker so immediate post-write
+          // re-reads are intercepted without re-reading from disk or bloating tokens.
+          if (toolCall.name === 'write_file' && toolCall.arguments) {
+            const args = typeof toolCall.arguments === 'object' ? (toolCall.arguments as any) : {};
+            const writtenPath = args.path;
+            const lineCount = typeof args.content === 'string' ? args.content.split('\n').length : 0;
+            if (writtenPath) {
+              readFileTracker.set(writtenPath, { lines: lineCount, step: currentStepIndex });
+            }
+          }
+          // Also track list_files calls — agent already knows the directory listing
+          if (toolCall.name === 'list_files' && !isIntercepted) {
+            readFileTracker.set('__list_files__', { lines: 0, step: currentStepIndex });
+          }
 
           const stringifiedResult = typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult);
           history.push({
@@ -380,7 +465,30 @@ export class AgentCoreLoop {
             content: stringifiedResult,
           });
 
-          this.logger.info({ tool: toolCall.name, durationMs: toolDurationMs }, 'Tool executed successfully');
+          this.logger.info({ tool: toolCall.name, durationMs: toolDurationMs, isIntercepted }, 'Tool executed successfully');
+
+          // ── Auto-Complete on Pull Request Creation (Codex/Claude Optimization) ───
+          // Once create_pull_request succeeds, the engineering goal is achieved.
+          // Conclude immediately to save 1-2 expensive turns (15k-20k tokens).
+          if (toolCall.name === 'create_pull_request') {
+            const prArgs = typeof toolCall.arguments === 'object' ? (toolCall.arguments as any) : {};
+            const prTitle = prArgs.title || task.title;
+            const prBody = prArgs.body || 'Pull Request proposed successfully.';
+            finalAnswer = `**Pull Request Created:** ${prTitle}\n\n${prBody}`;
+
+            this.logger.info(
+              { step: currentStepIndex, prTitle },
+              'Pull Request created successfully. Auto-completing agent loop.',
+            );
+
+            return {
+              success: true,
+              finalAnswer,
+              totalSteps: currentStepIndex,
+              totalTokens: accumulatedUsage,
+              durationMs: Date.now() - startTime,
+            };
+          }
         } catch (err: any) {
           const toolDurationMs = Date.now() - toolStartTime;
           const errorMessage = err instanceof Error ? err.message : String(err);
@@ -412,11 +520,41 @@ export class AgentCoreLoop {
           });
 
           if (loopCheck.shouldWarn) {
-            history.push({
-              role: 'user',
-              content: `[SYSTEM WARNING]: Tool '${toolCall.name}' with identical parameters has failed 3 times consecutively. Do not repeat this exact command. Try an alternative solution.`,
-            });
+            pendingWarnings.push(`[SYSTEM WARNING]: Tool '${toolCall.name}' with identical parameters has failed 3 times consecutively. Do not repeat this exact command. Try an alternative solution.`);
           }
+        }
+      }
+
+      // Flush buffered warnings AFTER all tool responses for this turn are complete.
+      // WARNING: Do NOT push user messages inside the tool-call loop — LLM APIs require
+      // all tool responses for an assistant turn to be contiguous (no interleaving).
+      for (const warning of pendingWarnings) {
+        history.push({ role: 'user', content: warning });
+      }
+      pendingWarnings = [];
+
+      // ── Stall detection ────────────────────────────────────────────────
+      // If the agent has spent STALL_THRESHOLD consecutive steps executing
+      // exploration/read tools without writing any file, abort to protect tokens.
+      const hasWrittenFile = response.toolCalls.some(
+        (tc) => tc.name === 'write_file' || tc.name === 'create_pull_request',
+      );
+      if (hasWrittenFile) {
+        stepsSinceLastWrite = 0;
+      } else {
+        stepsSinceLastWrite++;
+        if (stepsSinceLastWrite >= STALL_THRESHOLD) {
+          const stallError = `Agent stalled: ${STALL_THRESHOLD} consecutive steps without writing code or making file modifications. Aborted to preserve token budget.`;
+          this.logger.warn({ taskId: task.taskId, runId: task.runId, stepsSinceLastWrite }, stallError);
+          await this.recordFailureEvent(task, currentStepIndex, stallError, Date.now() - startTime);
+          return {
+            success: false,
+            blocked: true,
+            error: stallError,
+            totalSteps: currentStepIndex,
+            totalTokens: accumulatedUsage,
+            durationMs: Date.now() - startTime,
+          };
         }
       }
     }

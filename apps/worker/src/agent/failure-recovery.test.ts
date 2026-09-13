@@ -113,4 +113,35 @@ describe('Failure Recovery: retryWithBackoff & LoopDetector', () => {
       expect(res5.count).toBe(5);
     });
   });
+
+  describe('analyzeToolResult', () => {
+    it('detects exitCode 127 as fatal', async () => {
+      const { analyzeToolResult } = await import('./failure-recovery.js');
+      const res = analyzeToolResult('run_command', {
+        exitCode: 127,
+        stderr: 'sh: 1: git: not found\n',
+      });
+      expect(res.isFatal).toBe(true);
+      expect(res.reason).toContain('127');
+    });
+
+    it('detects unrecoverable quota / key error patterns as fatal', async () => {
+      const { analyzeToolResult } = await import('./failure-recovery.js');
+      const res = analyzeToolResult('api_call', {
+        error: 'insufficient_quota: You have exceeded your current quota.',
+      });
+      expect(res.isFatal).toBe(true);
+      expect(res.reason).toContain('insufficient_quota');
+    });
+
+    it('treats normal tool output and non-fatal errors as non-fatal', async () => {
+      const { analyzeToolResult } = await import('./failure-recovery.js');
+      const res = analyzeToolResult('run_tests', {
+        exitCode: 1,
+        stdout: '1 failed, 4 passed',
+        stderr: '',
+      });
+      expect(res.isFatal).toBe(false);
+    });
+  });
 });

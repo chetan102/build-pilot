@@ -47,16 +47,22 @@ export class GitWorktreeManager {
 
     await fs.mkdir(worktreesRoot, { recursive: true });
 
+    // Clean up any stale worktrees or leftovers
+    try {
+      await execFileAsync('git', ['worktree', 'prune'], { cwd: repoDir });
+      await fs.rm(worktreePath, { recursive: true, force: true });
+    } catch {}
+
     this.logger.info(
       { repoDir, branch, baseBranch, worktreePath },
       'Creating isolated Git worktree for task run',
     );
 
     try {
-      // Create worktree with a new dedicated branch from baseBranch
+      // Create worktree with a new dedicated branch from baseBranch (-B resets if exists)
       await execFileAsync(
         'git',
-        ['worktree', 'add', '-b', branch, worktreePath, baseBranch],
+        ['worktree', 'add', '-B', branch, worktreePath, baseBranch],
         { cwd: repoDir },
       );
 

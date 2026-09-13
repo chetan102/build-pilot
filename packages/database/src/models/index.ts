@@ -14,3 +14,4 @@ export * from './approval.model.js';
 export * from './pull-request.model.js';
 export * from './event.model.js';
 export * from './evaluation-result.model.js';
+export * from './repository-knowledge.model.js';

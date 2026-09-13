@@ -118,6 +118,18 @@ export const searchCodeTool = defineTool({
   execute: async (input, context) => {
     const rootPath = resolveSafePath(context.workspaceDir, input.path || '.');
     const maxResults = input.maxResults || 100;
+    const trimmedQuery = input.query.trim();
+
+    // Guard against dangerous wide scans (e.g. '.', '*', empty) that dump entire repo and exhaust context
+    if (trimmedQuery.length === 0 || trimmedQuery === '.' || trimmedQuery === '.*' || trimmedQuery === '*') {
+      return {
+        basePath: toRelativePath(context.workspaceDir, rootPath),
+        count: 0,
+        matches: [],
+        message: 'Search query is too broad or empty. Please provide a specific identifier, function name, or keyword.',
+      };
+    }
+
     const matches: Array<{ file: string; lineNumber: number; lineContent: string }> = [];
 
     let regex: RegExp;

@@ -409,6 +409,12 @@ export default function TasksPage() {
                                   {task.branch}
                                 </span>
                               )}
+
+                              {((task as any).parentTaskId || (task as any).dependsOn?.length > 0) && (
+                                <Badge variant="outline" className="text-[9px] bg-indigo-50/70 border-indigo-200 text-indigo-700 gap-1 px-1.5 py-0">
+                                  <span>🔗 Chained</span>
+                                </Badge>
+                              )}
                             </div>
 
                             {/* Card Footer: Model + Runtime */}

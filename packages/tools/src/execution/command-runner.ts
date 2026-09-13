@@ -30,7 +30,7 @@ export async function executeCommand(
     cwd,
     env = {},
     timeoutMs = 60000,
-    maxOutputBytes = 500 * 1024,
+    maxOutputBytes = 50 * 1024,
     signal,
   } = options;
 

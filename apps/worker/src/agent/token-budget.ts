@@ -124,59 +124,170 @@ export function formatAndTruncateFileTree(
 
 /**
  * Prunes conversation history messages to fit within available budget tokens.
- * Retains the first message (task instruction) and latest messages, truncating older intermediate steps.
+ * Retains the first message (task instruction) and latest messages, preserving atomic assistant+tool pairs.
  */
 export function pruneConversationHistory(
   history: LLMMessage[],
   availableTokens: number,
+  maxMessages = 30,
 ): { messages: LLMMessage[]; wasTruncated: boolean; droppedCount: number } {
   if (history.length <= 1) {
     return { messages: [...history], wasTruncated: false, droppedCount: 0 };
   }
 
-  const totalHistoryTokens = estimateMessagesTokens(history);
-  if (totalHistoryTokens <= availableTokens) {
-    return { messages: [...history], wasTruncated: false, droppedCount: 0 };
+  // Enforce maxMessages limit — must prune whole turns atomically to avoid
+  // orphaned tool messages (which cause HTTP 400 from LLM APIs).
+  let workingHistory = [...history];
+  let msgCountDropped = 0;
+  if (workingHistory.length > maxMessages) {
+    // Build turns from index 1 onward (index 0 is the protected kickoff message)
+    const preGrouped: LLMMessage[][] = [];
+    let current: LLMMessage[] = [];
+    for (let i = 1; i < workingHistory.length; i++) {
+      const msg = workingHistory[i]!;
+      if (msg.role === 'assistant' && current.length > 0) {
+        preGrouped.push(current);
+        current = [msg];
+      } else {
+        current.push(msg);
+      }
+    }
+    if (current.length > 0) preGrouped.push(current);
+
+    // Drop oldest turns until we are within budget
+    while (
+      preGrouped.reduce((s, t) => s + t.length, 0) + 1 > maxMessages &&
+      preGrouped.length > 0
+    ) {
+      const dropped = preGrouped.shift()!;
+      msgCountDropped += dropped.length;
+    }
+    workingHistory = [workingHistory[0]!, ...preGrouped.flat()];
+  }
+
+  const totalHistoryTokens = estimateMessagesTokens(workingHistory);
+  if (totalHistoryTokens <= availableTokens && msgCountDropped === 0) {
+    return { messages: workingHistory, wasTruncated: false, droppedCount: 0 };
   }
 
   // Always keep the very first message (initial instruction)
-  const firstMsg = history[0]!;
+  const firstMsg = workingHistory[0]!;
   const firstTokens = estimateMessageTokens(firstMsg);
   const remainingBudget = Math.max(0, availableTokens - firstTokens);
 
-  // Walk backwards from the latest message to pack as many recent messages as possible
-  const recentMessages: LLMMessage[] = [];
-  let accumulatedTokens = 0;
-  let droppedCount = 0;
+  // Group intermediate messages into conversational turns / tool call pairs:
+  const turns: LLMMessage[][] = [];
+  let currentTurn: LLMMessage[] = [];
 
-  for (let i = history.length - 1; i >= 1; i--) {
-    const msg = history[i]!;
-    const msgTokens = estimateMessageTokens(msg);
-
-    if (accumulatedTokens + msgTokens <= remainingBudget) {
-      recentMessages.unshift(msg);
-      accumulatedTokens += msgTokens;
+  for (let i = 1; i < workingHistory.length; i++) {
+    const msg = workingHistory[i]!;
+    if (msg.role === 'assistant' && currentTurn.length > 0) {
+      turns.push(currentTurn);
+      currentTurn = [msg];
     } else {
-      droppedCount++;
+      currentTurn.push(msg);
+    }
+  }
+  if (currentTurn.length > 0) {
+    turns.push(currentTurn);
+  }
+
+  // Walk backwards turn by turn to pack as many recent turns as possible
+  const includedTurns: LLMMessage[][] = [];
+  let accumulatedTokens = 0;
+  let droppedTurnsCount = 0;
+
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const turn = turns[i]!;
+    const turnTokens = estimateMessagesTokens(turn);
+
+    if (accumulatedTokens + turnTokens <= remainingBudget) {
+      includedTurns.unshift(turn);
+      accumulatedTokens += turnTokens;
+    } else {
+      droppedTurnsCount += turn.length;
     }
   }
 
+  const totalDropped = msgCountDropped + droppedTurnsCount;
   const result: LLMMessage[] = [firstMsg];
 
-  if (droppedCount > 0) {
+  if (totalDropped > 0) {
     result.push({
       role: 'system',
-      content: `[Note: ${droppedCount} older conversation steps were pruned to preserve context window token budget.]`,
+      content: `[Note: ${totalDropped} older conversation steps were pruned to preserve context window token budget.]`,
     });
   }
 
-  result.push(...recentMessages);
+  for (const turn of includedTurns) {
+    result.push(...turn);
+  }
 
   return {
     messages: result,
-    wasTruncated: droppedCount > 0,
-    droppedCount,
+    wasTruncated: totalDropped > 0,
+    droppedCount: totalDropped,
   };
+}
+
+/**
+ * Compacts older assistant tool calls (specifically write_file) so massive file contents
+ * do not persist indefinitely in the assistant message history.
+ */
+export function compactOlderAssistantWrites(
+  history: LLMMessage[],
+  recentWriteCount = 2,
+): { messages: LLMMessage[]; compactedCount: number } {
+  const writeIndices: number[] = [];
+  for (let i = 0; i < history.length; i++) {
+    const msg = history[i];
+    if (msg?.role === 'assistant' && msg.toolCalls?.some((tc) => tc.name === 'write_file')) {
+      writeIndices.push(i);
+    }
+  }
+
+  if (writeIndices.length <= recentWriteCount) {
+    return { messages: [...history], compactedCount: 0 };
+  }
+
+  const indicesToCompact = new Set(writeIndices.slice(0, writeIndices.length - recentWriteCount));
+  let compactedCount = 0;
+
+  const messages = history.map((msg, idx) => {
+    if (!indicesToCompact.has(idx) || !msg.toolCalls) {
+      return msg;
+    }
+
+    const modifiedToolCalls = msg.toolCalls.map((tc) => {
+      if (tc.name === 'write_file' && tc.arguments) {
+        try {
+          const args = typeof tc.arguments === 'string' ? JSON.parse(tc.arguments) : tc.arguments;
+          if (args.content && typeof args.content === 'string') {
+            const lineCount = args.content.split('\n').length;
+            compactedCount++;
+            return {
+              ...tc,
+              arguments: {
+                path: args.path,
+                content: `(File content written: ${lineCount} lines — compacted from earlier step)`,
+                createDirectories: args.createDirectories,
+              },
+            };
+          }
+        } catch {
+          // ignore parse errors
+        }
+      }
+      return tc;
+    });
+
+    return {
+      ...msg,
+      toolCalls: modifiedToolCalls,
+    };
+  });
+
+  return { messages, compactedCount };
 }
 
 /**

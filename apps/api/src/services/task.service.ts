@@ -240,7 +240,7 @@ export class TaskService {
       repo,
       pullNumber: prNumber,
       commitTitle: `Merge pull request #${prNumber} for task: ${task.title}`,
-      commitMessage: `Merged automatically via BuildPilot for Task #${task.issueNumber || task.id}`,
+      commitMessage: `Merged automatically via BuildPilot for Task #${task.issueNumber || (task as any)._id?.toString() || taskId}`,
       mergeMethod: 'squash',
     });
 

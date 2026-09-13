@@ -41,6 +41,21 @@ export interface ITaskRun {
   };
   checkpoint?: ITaskRunCheckpoint;
   heartbeat?: ITaskRunHeartbeat;
+  baselineTestResult?: {
+    exitCode: number;
+    total: number;
+    passed: number;
+    failed: number;
+    failedTests: string[];
+    summary?: string;
+  };
+  testDelta?: {
+    regressions: string[];
+    fixed: string[];
+    preExisting: string[];
+    newTests: string[];
+    verdict: 'PASS' | 'FAIL';
+  };
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -80,6 +95,21 @@ export const TaskRunSchema = new Schema<ITaskRun>(
       workerId: { type: String },
       lastHeartbeatAt: { type: Date },
       leaseExpiresAt: { type: Date, index: true },
+    },
+    baselineTestResult: {
+      exitCode: { type: Number },
+      total: { type: Number },
+      passed: { type: Number },
+      failed: { type: Number },
+      failedTests: { type: [String], default: [] },
+      summary: { type: String },
+    },
+    testDelta: {
+      regressions: { type: [String], default: [] },
+      fixed: { type: [String], default: [] },
+      preExisting: { type: [String], default: [] },
+      newTests: { type: [String], default: [] },
+      verdict: { type: String, enum: ['PASS', 'FAIL'] },
     },
   },
   { timestamps: true },

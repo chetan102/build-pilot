@@ -15,6 +15,7 @@ import {
   formatAndTruncateFileTree,
   pruneConversationHistory,
   distillOlderToolOutputs,
+  compactOlderAssistantWrites,
 } from './token-budget.js';
 import { BASE_SYSTEM_PROMPT, formatTaskPrompt, formatRepoContext } from './prompts.js';
 
@@ -48,12 +49,14 @@ export class ContextBuilder {
       };
     }
 
-    // 2. Build complete system prompt
+    // 2. Build complete system prompt (includes runtime dedup block + env note)
     const systemPrompt = this.buildSystemPrompt(
       options.task,
       repoContextWithTruncation,
       options.systemPromptOverride,
       options.customGuidelines,
+      options.readFiles,
+      options.sandboxCapabilities,
     );
 
     const systemPromptTokens = estimateTokens(systemPrompt);
@@ -71,6 +74,10 @@ export class ContextBuilder {
         wasTruncated = true;
       }
 
+      // Compact older assistant write_file calls so file contents don't bloat context
+      const compacted = compactOlderAssistantWrites(messages, 2);
+      messages = compacted.messages;
+
       // Distill older tool outputs (Observation Masking) to keep prompt tokens frugal
       const distilled = distillOlderToolOutputs(messages, 2);
       messages = distilled.messages;
@@ -85,12 +92,12 @@ export class ContextBuilder {
       budget.maxContextTokens - budget.reservedOutputTokens - systemPromptTokens,
     );
 
-    // 5. Prune history if total message tokens exceed available budget
+    // 5. Prune history if total message tokens or message count exceed available budget
     const {
       messages: prunedMessages,
       wasTruncated: historyTruncated,
       droppedCount,
-    } = pruneConversationHistory(messages, availableHistoryTokens);
+    } = pruneConversationHistory(messages, availableHistoryTokens, budget.maxHistoryMessages);
 
     if (historyTruncated) {
       wasTruncated = true;
@@ -112,13 +119,16 @@ export class ContextBuilder {
   }
 
   /**
-   * Assembles the system prompt from base instructions, task assignment, and repo context
+   * Assembles the system prompt from base instructions, task assignment, and repo context.
+   * Also injects runtime context: files already read this session + sandbox capabilities.
    */
   buildSystemPrompt(
     task: TaskContext,
     repo?: RepoContext,
     systemPromptOverride?: string,
     customGuidelines?: string,
+    readFiles?: Map<string, { lines: number; step: number }>,
+    sandboxCapabilities?: { gitAvailable: boolean; nodeAvailable: boolean },
   ): string {
     const base = systemPromptOverride || BASE_SYSTEM_PROMPT;
     const taskSection = formatTaskPrompt(task);
@@ -132,6 +142,25 @@ export class ContextBuilder {
 
     if (repoSection) {
       parts.push(repoSection);
+    }
+
+    // Inject sandbox capabilities note — prevents panic loops when git is missing
+    if (sandboxCapabilities) {
+      const envLines: string[] = ['# SANDBOX ENVIRONMENT'];
+      envLines.push(`- git: ${sandboxCapabilities.gitAvailable ? '✅ available' : '❌ NOT available — do NOT run git commands, use commit_and_push tool instead'}`);
+      envLines.push(`- node: ${sandboxCapabilities.nodeAvailable ? '✅ available' : '❌ NOT available'}`);
+      parts.push(envLines.join('\n'));
+    }
+
+    // Inject read-file deduplication block — prevents the model re-reading files it already has
+    if (readFiles && readFiles.size > 0) {
+      const lines = ['# FILES ALREADY IN YOUR CONTEXT (DO NOT RE-READ THESE)'];
+      lines.push('The following files were read earlier in this session. Their content is in your context window. Do NOT call read_file on them again — just recall from memory.');
+      lines.push('');
+      for (const [path, entry] of readFiles) {
+        lines.push(`- \`${path}\`  (${entry.lines} lines, read at step ${entry.step})`);
+      }
+      parts.push(lines.join('\n'));
     }
 
     return parts.join('\n\n---\n\n');

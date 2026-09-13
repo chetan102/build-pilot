@@ -230,10 +230,23 @@ export class OpenRouterProvider extends BaseLLMProvider {
 
     // If systemPrompt is provided separately, prepend it as the first message
     if (request.systemPrompt) {
-      messages.push({
-        role: 'system',
-        content: request.systemPrompt,
-      });
+      if (request.model.includes('claude') || request.model.includes('anthropic')) {
+        messages.push({
+          role: 'system',
+          content: [
+            {
+              type: 'text',
+              text: request.systemPrompt,
+              cache_control: { type: 'ephemeral' },
+            },
+          ],
+        });
+      } else {
+        messages.push({
+          role: 'system',
+          content: request.systemPrompt,
+        });
+      }
     }
 
     // Convert LLMMessage[] into OpenRouter / OpenAI format

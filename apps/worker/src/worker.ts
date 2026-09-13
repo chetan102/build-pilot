@@ -12,6 +12,7 @@ import {
   eventRepository as defaultEventRepository,
   projectRepository,
   providerCredentialRepository,
+  repositoryKnowledgeRepository,
   TaskRepository,
   TaskRunRepository,
   EventRepository,
@@ -26,7 +27,13 @@ import {
 } from '@buildpilot/queue';
 import { TaskStatus, TaskRunStatus, LLMProviderType } from '@buildpilot/domain';
 import { LLMProvider, providerFactory, MockLLMProvider } from '@buildpilot/llm';
-import { toolRegistry as defaultToolRegistry, ToolRegistry } from '@buildpilot/tools';
+import {
+  toolRegistry as defaultToolRegistry,
+  ToolRegistry,
+  parseTestOutput,
+  computeTestDelta,
+  DockerSandboxRunner,
+} from '@buildpilot/tools';
 import { gitRepositoryManager, gitWorktreeManager, gitCommitPushService, GitHubService, WorktreeInfo } from '@buildpilot/github';
 import { agentCoreLoop, AgentCoreLoop } from './agent/index.js';
 import { RepoContext } from './agent/types.js';
@@ -273,7 +280,23 @@ export class WorkerService {
         let targetRepoDir = '';
         let repoContext: RepoContext | undefined = undefined;
         const repoName = job.data.repositoryId || '';
-        const baseBranch = job.data.baseBranch || 'main';
+        let baseBranch = job.data.baseBranch || 'main';
+
+        // Check for parent task branch stacking (Phase 4)
+        if (job.data.metadata?.parentTaskId) {
+          try {
+            const parentTask = await this.taskRepo.findById(job.data.metadata.parentTaskId as string);
+            if (parentTask && parentTask.branch && parentTask.status === TaskStatus.COMPLETED) {
+              baseBranch = parentTask.branch;
+              this.logger.info(
+                { parentTaskId: parentTask._id, parentBranch: parentTask.branch },
+                'Branching from completed parent task branch for task dependency chain',
+              );
+            }
+          } catch {}
+        }
+
+        let baselineSuite: any = null;
 
         if (repoName && repoName.includes('/') && process.env.NODE_ENV !== 'test') {
           const githubToken =
@@ -311,6 +334,41 @@ export class WorkerService {
             this.logger.info({ workspaceDir }, 'Prepared dedicated workspace worktree for task');
 
             const fileTree = await listDirectoryFilesRecursive(workspaceDir);
+
+            // Check / load Repository Knowledge Cache (Phase 2)
+            let repoKnowledge = await repositoryKnowledgeRepository.findByRepositoryId(repoName);
+            if (!repoKnowledge) {
+              try {
+                let pkgJson: any = {};
+                try {
+                  const raw = await fs.readFile(path.join(workspaceDir, 'package.json'), 'utf-8');
+                  pkgJson = JSON.parse(raw);
+                } catch {}
+
+                const isPnpm = pkgJson.packageManager?.includes('pnpm') || (await fs.stat(path.join(workspaceDir, 'pnpm-lock.yaml')).then(() => true).catch(() => false));
+                const testCmd = pkgJson.scripts?.test ? (isPnpm ? 'pnpm test' : 'npm test') : 'npm test';
+                const pm = isPnpm ? 'pnpm' : 'npm';
+                const allDeps = Object.keys({ ...(pkgJson.dependencies || {}), ...(pkgJson.devDependencies || {}) });
+
+                repoKnowledge = await repositoryKnowledgeRepository.upsert(repoName, {
+                  commitSha: 'HEAD',
+                  fileTree: fileTree.slice(0, 50).join('\n'),
+                  techStack: {
+                    languages: ['JavaScript', 'TypeScript'],
+                    frameworks: allDeps.filter((f) => ['react', 'next', 'express', 'vitest', 'jest', 'vue', 'svelte', 'tailwind'].some((k) => f.includes(k))),
+                    packageManager: pm,
+                    testFramework: allDeps.some((f) => f.includes('vitest')) ? 'vitest' : allDeps.some((f) => f.includes('jest')) ? 'jest' : 'node:test',
+                    testCommand: testCmd,
+                    buildTool: pkgJson.scripts?.build ? `${pm} run build` : '',
+                  },
+                  conventions: 'Standard clean code, minimal dependencies, preserve existing patterns.',
+                  architectureSummary: `Repository with ${fileTree.length} files. Primary package manager: ${pm}.`,
+                  pastLearnings: [],
+                  expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                });
+              } catch {}
+            }
+
             repoContext = {
               owner: repoName.split('/')[0] || '',
               name: repoName.split('/')[1] || '',
@@ -318,12 +376,67 @@ export class WorkerService {
               defaultBranch: baseBranch,
               workspacePath: workspaceDir,
               fileTree,
+              detectedLanguages: repoKnowledge?.techStack?.languages || ['JavaScript', 'TypeScript'],
+              frameworks: repoKnowledge?.techStack?.frameworks || [],
+              guidelines: repoKnowledge?.conventions,
+              architectureSummary: repoKnowledge?.architectureSummary,
+              pastLearnings: repoKnowledge?.pastLearnings || [],
+              packageInfo: {
+                scripts: {
+                  test: repoKnowledge?.techStack?.testCommand || 'npm test',
+                  ...(repoKnowledge?.techStack?.buildTool ? { build: repoKnowledge.techStack.buildTool } : {}),
+                },
+              },
             };
+
+            // Execute Baseline Test Run prior to agent modifications (Phase 3)
+            try {
+              const testRunner = new DockerSandboxRunner();
+              const testCmd = repoKnowledge?.techStack?.testCommand || 'npm test';
+              const rawBaseline = await testRunner.run({
+                workspaceDir,
+                command: testCmd,
+                timeoutMs: 90000,
+              });
+              baselineSuite = parseTestOutput(rawBaseline.stdout, rawBaseline.stderr);
+              const baselineTestResult = {
+                exitCode: rawBaseline.exitCode,
+                total: baselineSuite.total,
+                passed: baselineSuite.passed,
+                failed: baselineSuite.failed,
+                failedTests: baselineSuite.testCases.filter((t: any) => t.status === 'fail').map((t: any) => t.name),
+                summary: `${baselineSuite.passed} passed, ${baselineSuite.failed} failed out of ${baselineSuite.total} test(s)`,
+              };
+              await this.taskRunRepo.update(runId, { baselineTestResult });
+              this.logger.info({ baselineTestResult }, 'Baseline test run recorded before agent modifications');
+            } catch (bErr: any) {
+              this.logger.warn({ err: bErr.message }, 'Baseline test run skipped/failed (non-fatal)');
+            }
           } catch (gitErr: any) {
             this.logger.warn(
               { gitErr: gitErr.message, repoName },
               'Could not initialize git worktree; using workspace fallback',
             );
+          }
+        }
+
+        // Preflight sandbox environment capabilities verification
+        let sandboxCapabilities = { gitAvailable: true, nodeAvailable: true };
+        if (worktreeInfo && process.env.NODE_ENV !== 'test') {
+          try {
+            const preflightRunner = new DockerSandboxRunner();
+            const preflightRes = await preflightRunner.run({
+              workspaceDir,
+              command: 'which git && echo GIT_OK || echo GIT_MISSING; which node && echo NODE_OK || echo NODE_MISSING',
+              timeoutMs: 10000,
+            });
+            sandboxCapabilities = {
+              gitAvailable: preflightRes.stdout.includes('GIT_OK'),
+              nodeAvailable: preflightRes.stdout.includes('NODE_OK'),
+            };
+            this.logger.info({ sandboxCapabilities }, 'Sandbox preflight environment capabilities verified');
+          } catch (pfErr: any) {
+            this.logger.warn({ err: pfErr.message }, 'Sandbox preflight check skipped (non-fatal)');
           }
         }
 
@@ -390,6 +503,7 @@ export class WorkerService {
             model: resolvedModel,
             maxSteps: maxSteps || 30,
             ...(worktreeInfo ? { workspaceDir } : {}),
+            sandboxCapabilities,
           },
         );
 
@@ -406,6 +520,26 @@ export class WorkerService {
 
         if (!agentResult.success && !agentResult.finalAnswer) {
           throw new Error(agentResult.error || 'Agent loop terminated unsuccessfully');
+        }
+
+        // Post-execution test delta computation (Phase 3)
+        if (worktreeInfo && baselineSuite) {
+          try {
+            const testRunner = new DockerSandboxRunner();
+            const repoKnowledge = await repositoryKnowledgeRepository.findByRepositoryId(repoName);
+            const testCmd = repoKnowledge?.techStack?.testCommand || 'npm test';
+            const rawPostFix = await testRunner.run({
+              workspaceDir: worktreeInfo.worktreePath,
+              command: testCmd,
+              timeoutMs: 90000,
+            });
+            const postSuite = parseTestOutput(rawPostFix.stdout, rawPostFix.stderr);
+            const testDelta = computeTestDelta(baselineSuite, postSuite);
+            await this.taskRunRepo.update(runId, { testDelta });
+            this.logger.info({ testDelta }, 'Post-fix test delta computed and saved');
+          } catch (postTestErr: any) {
+            this.logger.warn({ err: postTestErr.message }, 'Post-fix test delta calculation skipped (non-fatal)');
+          }
         }
 
         // Capture git diff, commit changes, push branch, and open PR if worktree was created
@@ -626,6 +760,16 @@ export class WorkerService {
 
       // Record failure on TaskRun
       await this.taskRunRepo.markFailed(runId, errorMessage, durationMs);
+
+      // Record learning for repository knowledge cache (Phase 2)
+      if (job.data.repositoryId && process.env.NODE_ENV !== 'test') {
+        try {
+          await repositoryKnowledgeRepository.addLearning(
+            job.data.repositoryId,
+            `Task "${title}" failed: ${errorMessage.slice(0, 150)}`,
+          );
+        } catch {}
+      }
 
       // Record TASK_RUN_FAILED event
       await this.eventRepo.create({

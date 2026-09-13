@@ -14,13 +14,16 @@ import {
   ShieldCheck,
   Github,
   Sparkles,
+  LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { fetchGitHubUser, GitHubUser } from '@/lib/api-client';
+import { useAuth } from '@/lib/auth-context';
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
   const [githubUser, setGithubUser] = React.useState<GitHubUser | null>(null);
 
   React.useEffect(() => {
@@ -174,28 +177,39 @@ export function Sidebar() {
 
       {/* GitHub Account or Setup status */}
       <div className="p-3.5 border-t border-slate-100 bg-slate-50/60">
-        {githubUser ? (
-          <div className="flex items-center gap-2.5">
-            <img
-              src={githubUser.avatarUrl}
-              alt={githubUser.login}
-              className="w-7 h-7 rounded-full ring-1 ring-slate-300"
-            />
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold text-slate-800 truncate">@{githubUser.login}</p>
-              <p className="text-[10px] text-emerald-600 flex items-center gap-1 font-medium">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                OAuth Connected
-              </p>
+        {user || githubUser ? (
+          <div className="flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <img
+                src={user?.avatarUrl || githubUser?.avatarUrl}
+                alt={user?.name || githubUser?.login || 'User'}
+                className="w-7 h-7 rounded-full ring-1 ring-slate-300 flex-shrink-0"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-slate-800 truncate">
+                  {user?.name || `@${githubUser?.login}`}
+                </p>
+                <p className="text-[10px] text-emerald-600 flex items-center gap-1 font-medium truncate">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
+                  @{user?.login || githubUser?.login}
+                </p>
+              </div>
             </div>
+            <button
+              onClick={logout}
+              title="Sign Out"
+              className="p-1 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-slate-100 transition"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </button>
           </div>
         ) : (
           <Link
-            href="/projects"
+            href="/login"
             className="flex items-center gap-2 text-xs text-slate-600 hover:text-slate-900 font-semibold"
           >
             <Github className="h-4 w-4 text-slate-500" />
-            <span>Connect GitHub</span>
+            <span>Sign In with GitHub</span>
           </Link>
         )}
       </div>

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { defineTool } from '../define-tool.js';
 import { defaultDockerRunner } from '../sandbox/docker-runner.js';
+import { parseTestOutput } from './test-parser.js';
 
 export const runCommandTool = defineTool({
   name: 'run_command',
@@ -66,7 +67,12 @@ export const runTestsTool = defineTool({
   execute: async (input, context) => {
     let command = input.testCommand || 'npm test';
     if (input.testFile) {
-      command = `${command} ${input.testFile}`;
+      // If command is npm test, format with '--' for targeted file execution
+      if (command.trim() === 'npm test' || (command.startsWith('npm test') && !command.includes('--'))) {
+        command = `${command} -- ${input.testFile}`;
+      } else {
+        command = `${command} ${input.testFile}`;
+      }
     }
 
     let result = await defaultDockerRunner.run({
@@ -93,17 +99,29 @@ export const runTestsTool = defineTool({
       }
     }
 
-    const passed = result.exitCode === 0;
+    const parsed = parseTestOutput(result.stdout, result.stderr);
+    const passed = result.exitCode === 0 || (parsed.total > 0 && parsed.failed === 0);
+    const failedTestNames = parsed.testCases.filter((t) => t.status === 'fail').map((t) => t.name);
+
+    const failureSummary = parsed.total > 0
+      ? `Tests failed: ${parsed.failed} of ${parsed.total} test(s) failed (${failedTestNames.join(', ')})`
+      : `Tests failed with exit code ${result.exitCode}`;
 
     return {
       command,
       passed,
       exitCode: result.exitCode,
-      stdout: result.stdout,
-      stderr: result.stderr,
+      total: parsed.total,
+      passedCount: parsed.passed,
+      failedCount: parsed.failed,
+      failedTests: failedTestNames,
+      summary: passed
+        ? `All ${parsed.total || 'executed'} test(s) passed successfully.`
+        : failureSummary,
+      stdout: result.stdout.slice(0, 4000),
+      stderr: result.stderr.slice(0, 2000),
       durationMs: result.durationMs,
       timedOut: result.timedOut,
-      summary: passed ? 'All tests passed successfully.' : `Tests failed with exit code ${result.exitCode}`,
     };
   },
 });
