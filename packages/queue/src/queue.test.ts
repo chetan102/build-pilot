@@ -73,7 +73,7 @@ describe('Queue Configuration Defaults & Dead-Letter Handling', () => {
   });
 
   it('configures exponential backoff and dead-letter retention in DEFAULT_JOB_OPTIONS', () => {
-    expect(DEFAULT_JOB_OPTIONS.attempts).toBe(3);
+    expect(DEFAULT_JOB_OPTIONS.attempts).toBe(1);
     expect(DEFAULT_JOB_OPTIONS.backoff.type).toBe('exponential');
     expect(DEFAULT_JOB_OPTIONS.backoff.delay).toBe(5000);
     expect(DEFAULT_JOB_OPTIONS.removeOnFail.count).toBe(5000);

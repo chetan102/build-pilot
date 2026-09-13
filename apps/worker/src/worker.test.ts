@@ -116,6 +116,7 @@ describe('WorkerService Lifecycle & Job Processing', () => {
     expect(mockTaskRunRepo.markCompleted).toHaveBeenCalledWith(
       '6a9cf2425d9b845db6781a19',
       expect.any(Number),
+      undefined,
     );
 
     // 5. Task transitioned to COMPLETED

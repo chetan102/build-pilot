@@ -84,7 +84,8 @@ export class DockerSandboxRunner {
     dockerArgs.push('-e', 'CI=true');
     dockerArgs.push('-e', 'FORCE_COLOR=0');
     dockerArgs.push(image);
-    dockerArgs.push('sh', '-c', command);
+    const envBootstrap = 'export PATH="$PATH:/workspace/node_modules/.bin"; (corepack enable >/dev/null 2>&1 || true);';
+    dockerArgs.push('sh', '-c', `${envBootstrap} ${command}`);
 
     return dockerArgs;
   }

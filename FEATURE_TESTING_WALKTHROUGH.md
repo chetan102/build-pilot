@@ -38,8 +38,8 @@ docker ps
 
 ### 2. Verify `.env` Configuration
 Open your `.env` file and make sure you have:
-1. An active AI API key (e.g. `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, or `OPENAI_API_KEY`).
-2. GitHub OAuth App credentials (`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`) or your `GITHUB_TOKEN`.
+1. GitHub OAuth App credentials (`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`) or your `GITHUB_TOKEN`.
+2. *(Note: You do **not** need to put AI API keys into `.env`! You can enter your OpenAI, Gemini, Anthropic, or OpenRouter API key directly in the UI at `/settings/providers` or right inside the task modal).*
 
 ### 3. Launch BuildPilot
 ```bash
@@ -164,6 +164,8 @@ git push origin main
 3. In the modal, enter:
    - **Task Title**: `Fix divide function bug in calculator.js`
    - **Description**: `The divide test is failing because divide(10, 2) is returning 20 instead of 5. Please inspect calculator.js, fix the division logic, and run npm test to ensure all 5 tests pass.`
+   - **AI Provider & Model**: Select your preferred provider (e.g. OpenAI GPT-4o, Google Gemini 1.5 Pro, or Anthropic Claude 3.5 Sonnet).
+   - **API Key**: Paste your API key (if you haven't already saved it in Settings).
 4. Click **"Dispatch Agent Task"**.
 5. **Watch the live execution on `/tasks/<taskId>`**:
    - **Planner Agent**: Reads `calculator.js` and `calculator.test.js`.
@@ -256,19 +258,19 @@ git push origin main
 
 ---
 
-## 🧠 Part 6: Testing LLM Provider Switching
+## 🧠 Part 6: Testing LLM Provider Switching & UI Credentials
 
-BuildPilot supports plug-and-play LLM switching across all major providers.
+BuildPilot supports 100% UI-driven LLM switching across all major providers with AES-256 encryption at rest.
 
 1. Open **[http://localhost:3000/settings/providers](http://localhost:3000/settings/providers)**.
-2. Switch between providers:
-   - **OpenRouter** (Claude 3.5 Sonnet, GPT-4o, DeepSeek-R1)
-   - **Google Gemini** (Gemini 1.5 Pro)
-   - **Anthropic** (Direct Claude 3.5 Sonnet)
-   - **OpenAI** (Direct GPT-4o)
-   - **Local Ollama** (`http://localhost:11434/v1` for open-weights models)
-3. Enter your API key and click **"Save & Set as Default"**.
-4. Launch a new task — the worker will immediately utilize your selected model adapter.
+2. Select your provider:
+   - **OpenAI** (Direct GPT-4o, GPT-4o-mini)
+   - **Google Gemini** (Gemini 1.5 Pro, Gemini 1.5 Flash)
+   - **Anthropic** (Direct Claude 3.5 Sonnet, Claude 3.5 Haiku)
+   - **OpenRouter** (Claude 3.5 Sonnet, DeepSeek R1, Llama 3)
+3. Enter your API key and click **"Test Connection"** to verify ping latency and tool calling live.
+4. Click **"Save API Key"** — your key is encrypted with AES-256 and stored securely in MongoDB.
+5. Launch any task from `/projects` — the worker will immediately utilize your saved active model and credentials.
 
 ---
 

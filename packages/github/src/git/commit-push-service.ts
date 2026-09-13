@@ -28,6 +28,7 @@ export interface PushTaskBranchOptions {
   branch: string;
   remote?: string;
   force?: boolean;
+  repoUrl?: string;
 }
 
 export class GitCommitPushService {
@@ -107,9 +108,18 @@ export class GitCommitPushService {
   }
 
   async pushBranch(options: PushTaskBranchOptions): Promise<{ pushed: boolean; remoteRef: string }> {
-    const { worktreePath, branch, remote = 'origin', force = false } = options;
+    const { worktreePath, branch, remote = 'origin', force = false, repoUrl } = options;
 
-    const args = ['push', remote, branch];
+    if (repoUrl) {
+      try {
+        await execFileAsync('git', ['remote', 'set-url', remote, repoUrl], { cwd: worktreePath });
+      } catch {
+        // non-fatal, fallback to pushing directly to URL
+      }
+    }
+
+    const pushTarget = repoUrl || remote;
+    const args = ['push', pushTarget, branch];
     if (force) {
       args.push('--force');
     }

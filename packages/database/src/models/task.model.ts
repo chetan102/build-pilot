@@ -14,6 +14,8 @@ export interface ITask {
   activeRunId?: string;
   completedRunId?: string;
   prId?: string;
+  prUrl?: string;
+  prNumber?: number;
   activeApprovalId?: string;
   tags: string[];
   metadata?: Record<string, unknown>;
@@ -39,6 +41,8 @@ export const TaskSchema = new Schema<ITask>(
     activeRunId: { type: String },
     completedRunId: { type: String },
     prId: { type: String },
+    prUrl: { type: String },
+    prNumber: { type: Number },
     activeApprovalId: { type: String },
     tags: { type: [String], default: [] },
     metadata: { type: Schema.Types.Mixed, default: {} },

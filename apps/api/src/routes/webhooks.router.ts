@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import mongoose from 'mongoose';
 import {
   verifyWebhookSignature,
   isIssueEligible,
@@ -9,6 +10,7 @@ import {
   projectRepository,
   taskRepository,
   eventRepository,
+  providerCredentialRepository,
 } from '@buildpilot/database';
 import { taskQueueManager } from '../queue.js';
 import { TaskStatus, LLMProviderType } from '@buildpilot/domain';
@@ -104,7 +106,20 @@ webhooksRouter.post(
         });
 
         const taskId = (task as any)._id?.toString() || `task_${Date.now()}`;
-        const runId = `run_${Date.now().toString(36)}`;
+        const runId = new mongoose.Types.ObjectId().toString();
+
+        // Dynamically resolve active provider credentials configured by user
+        let webhookProvider: LLMProviderType = LLMProviderType.OPENROUTER;
+        let webhookModel: string = 'anthropic/claude-3.5-sonnet';
+        try {
+          const activeCred = await providerCredentialRepository.findActiveProvider('default-user');
+          if (activeCred) {
+            webhookProvider = activeCred.provider as LLMProviderType;
+            webhookModel = activeCred.defaultModel || webhookModel;
+          }
+        } catch {
+          // ignore lookup error
+        }
 
         // Enqueue into BullMQ
         await taskQueueManager.enqueueTask({
@@ -117,8 +132,8 @@ webhooksRouter.post(
           description: task.description,
           branch: branchName,
           baseBranch: payload.repository.default_branch || 'main',
-          provider: LLMProviderType.OPENROUTER,
-          model: 'anthropic/claude-3.5-sonnet',
+          provider: webhookProvider,
+          model: webhookModel,
           maxSteps: 30,
           correlationId: req.correlationId,
         });

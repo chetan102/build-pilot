@@ -2,6 +2,7 @@ import {
   projectRepository,
   taskRepository,
   eventRepository,
+  providerCredentialRepository,
   IProject,
   ITask,
   ListProjectsFilter,
@@ -52,15 +53,41 @@ export class ProjectService {
   async listProjects(
     filter: ListProjectsFilter = {},
     pagination: PaginationOptions = {},
-  ): Promise<PaginatedProjectsResult> {
+  ): Promise<any> {
     const page = pagination.page && pagination.page > 0 ? pagination.page : 1;
     const limit = pagination.limit && pagination.limit > 0 ? pagination.limit : 20;
 
     const { projects, total } = await projectRepository.list(filter, { page, limit });
     const totalPages = Math.ceil(total / limit) || 1;
 
+    // Enrich projects with task stats
+    const enrichedProjects = await Promise.all(
+      projects.map(async (p: any) => {
+        const projectId = p._id?.toString() || p.id;
+        let allTasks: any[] = [];
+        try {
+          allTasks = (await taskRepository.listByProject(projectId)) || [];
+        } catch {
+          allTasks = [];
+        }
+        const completed = allTasks.filter((t) => t.status === 'COMPLETED').length;
+        const running = allTasks.filter((t) => ['PLANNING', 'DEVELOPMENT', 'REVIEW', 'REPAIRING', 'QUEUED'].includes(t.status)).length;
+        const failed = allTasks.filter((t) => ['FAILED', 'CANCELLED', 'TIMED_OUT'].includes(t.status)).length;
+
+        return {
+          ...(typeof p.toObject === 'function' ? p.toObject() : p),
+          stats: {
+            totalTasks: allTasks.length,
+            completedTasks: completed,
+            activeTasks: running,
+            failedTasks: failed,
+          },
+        };
+      }),
+    );
+
     return {
-      projects,
+      projects: enrichedProjects,
       total,
       page,
       limit,
@@ -123,6 +150,22 @@ export class ProjectService {
     // Enqueue task for background worker execution
     try {
       const runId = new mongoose.Types.ObjectId().toString();
+      const meta = (task.metadata as Record<string, any>) || {};
+      let taskProvider = meta.provider;
+      let taskModel = meta.model;
+
+      if (!taskProvider || !taskModel) {
+        try {
+          const activeCred = await providerCredentialRepository.findActiveProvider('default-user');
+          if (activeCred) {
+            taskProvider = taskProvider || activeCred.provider;
+            taskModel = taskModel || activeCred.defaultModel;
+          }
+        } catch {
+          // ignore lookup error
+        }
+      }
+
       await taskQueueManager.enqueueTask({
         taskId,
         runId,
@@ -133,10 +176,12 @@ export class ProjectService {
         description: task.description,
         branch: task.branch,
         baseBranch: task.baseBranch,
-        metadata: (task.metadata as Record<string, unknown>) || {},
+        provider: taskProvider,
+        model: taskModel,
+        metadata: meta,
       });
       createLogger({ serviceName: 'project-service' }).info(
-        { taskId, branch: task.branch },
+        { taskId, branch: task.branch, provider: taskProvider, model: taskModel },
         'Task successfully enqueued into background worker queue',
       );
     } catch (err) {

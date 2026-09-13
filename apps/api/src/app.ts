@@ -10,6 +10,7 @@ import { healthRouter } from './routes/health.router.js';
 import { projectsRouter } from './routes/projects.router.js';
 import { tasksRouter } from './routes/tasks.router.js';
 import { githubRouter } from './routes/github.router.js';
+import { providersRouter } from './routes/providers.router.js';
 
 export interface AppOptions {
   logger?: Logger;
@@ -48,6 +49,7 @@ export function createApp(options: AppOptions = {}): Express {
   app.use('/api/v1/projects', projectsRouter);
   app.use('/api/v1/tasks', tasksRouter);
   app.use('/api/v1/github', githubRouter);
+  app.use('/api/v1/providers', providersRouter);
 
   // Custom / feature routes
   if (options.routes) {

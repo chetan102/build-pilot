@@ -27,7 +27,7 @@ export const listFilesTool = defineTool({
   inputSchema: z.object({
     path: z.string().optional().default('.').describe('Relative directory path to inspect'),
     maxDepth: z.number().int().min(1).max(20).optional().default(5).describe('Maximum directory depth to traverse'),
-    limit: z.number().int().min(1).max(2000).optional().default(500).describe('Maximum entries to return'),
+    limit: z.number().int().min(1).max(2000).optional().default(100).describe('Maximum entries to return'),
     includeHidden: z.boolean().optional().default(false).describe('Whether to include hidden files (starting with .)'),
   }),
   parameters: {
@@ -43,7 +43,7 @@ export const listFilesTool = defineTool({
     const rootPath = resolveSafePath(context.workspaceDir, input.path || '.');
     const entries: FileEntry[] = [];
     const maxDepth = input.maxDepth || 5;
-    const limit = input.limit || 500;
+    const limit = input.limit || 100;
     const includeHidden = input.includeHidden ?? false;
 
     async function walk(currentDir: string, currentDepth: number): Promise<void> {
@@ -102,7 +102,7 @@ export const searchCodeTool = defineTool({
     path: z.string().optional().default('.').describe('Relative directory or file to search within'),
     isRegex: z.boolean().optional().default(false).describe('Treat query as regular expression'),
     caseSensitive: z.boolean().optional().default(false).describe('Case-sensitive matching'),
-    maxResults: z.number().int().min(1).max(500).optional().default(100).describe('Maximum matches to return'),
+    maxResults: z.number().int().min(1).max(500).optional().default(30).describe('Maximum matches to return'),
   }),
   parameters: {
     type: 'object',

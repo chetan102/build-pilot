@@ -54,6 +54,21 @@ export class TaskController {
     }
   }
 
+  async deleteTask(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const taskId = String(req.params.taskId || '');
+      await taskService.deleteTask(taskId);
+
+      res.status(200).json({
+        success: true,
+        message: `Task ${taskId} deleted successfully`,
+        correlationId: req.correlationId,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async retryTask(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const taskId = String(req.params.taskId || '');
@@ -135,6 +150,21 @@ export class TaskController {
         clearInterval(keepAliveTimer);
         unsubscribe();
         res.end();
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async mergePullRequest(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const taskId = String(req.params.taskId || '');
+      const result = await taskService.mergeTaskPullRequest(taskId);
+
+      res.status(200).json({
+        success: true,
+        ...result,
+        correlationId: req.correlationId,
       });
     } catch (err) {
       next(err);

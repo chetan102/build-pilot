@@ -159,6 +159,72 @@ describe('Agent Runtime — ContextBuilder & Token Budgeting', () => {
     });
   });
 
+  describe('Observation Masking & Tool Output Distillation', () => {
+    it('distills older tool outputs while keeping recent tool outputs in full fidelity', () => {
+      const history: LLMMessage[] = [
+        { role: 'user', content: 'Fix bug in calculator' },
+        {
+          role: 'assistant',
+          content: 'Reading calculator.js',
+          toolCalls: [{ id: 'tc1', name: 'read_file', arguments: { path: 'calculator.js' } }],
+        },
+        {
+          role: 'tool',
+          toolCallId: 'tc1',
+          content: JSON.stringify({
+            path: 'calculator.js',
+            totalLines: 150,
+            content: 'export function add(a, b) {\n' + '  // line\n'.repeat(100) + '}',
+          }),
+        },
+        {
+          role: 'assistant',
+          content: 'Searching test files',
+          toolCalls: [{ id: 'tc2', name: 'search_code', arguments: { query: 'describe' } }],
+        },
+        {
+          role: 'tool',
+          toolCallId: 'tc2',
+          content: JSON.stringify({
+            query: 'describe',
+            count: 20,
+            matches: Array.from({ length: 20 }, (_, i) => ({ file: `test_${i}.js`, lineNumber: 1, lineContent: 'describe()' })),
+          }),
+        },
+        {
+          role: 'assistant',
+          content: 'Running tests now',
+          toolCalls: [{ id: 'tc3', name: 'run_tests', arguments: {} }],
+        },
+        {
+          role: 'tool',
+          toolCallId: 'tc3',
+          content: JSON.stringify({
+            command: 'npm test',
+            passed: true,
+            exitCode: 0,
+            summary: 'All tests passed',
+          }),
+        },
+      ];
+
+      // With recentToolCount = 2, tc1 (older) should be distilled, while tc2 and tc3 remain intact
+      const builder = new ContextBuilder();
+      const result = builder.build({
+        task: sampleTask,
+        repo: sampleRepo,
+        history,
+      });
+
+      const tool1 = result.messages.find((m) => m.toolCallId === 'tc1');
+      const tool3 = result.messages.find((m) => m.toolCallId === 'tc3');
+
+      expect(tool1?.content).toContain('(File content was inspected in earlier step)');
+      expect(tool1?.content).not.toContain('// line');
+      expect(tool3?.content).toContain('All tests passed');
+    });
+  });
+
   describe('ContextBuilder Assembly', () => {
     it('builds complete structured prompt and messages for a new task', () => {
       const builder = new ContextBuilder();

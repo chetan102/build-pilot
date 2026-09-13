@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventEmitter } from 'events';
 import { Express } from 'express';
 import { createApp } from '../app.js';
-import { projectRepository, taskRepository, eventRepository } from '@buildpilot/database';
+import { projectRepository, taskRepository, eventRepository, providerCredentialRepository } from '@buildpilot/database';
 import { taskQueueManager } from '../queue.js';
 import { gitHubService } from '@buildpilot/github';
 
@@ -86,6 +86,7 @@ describe('GitHub Webhooks & Issue Intake (Phase 9)', () => {
     vi.spyOn(taskRepository, 'create').mockImplementation((data: any) =>
       Promise.resolve({ _id: '6a9cf1f85d9b845db6781a0b', ...data }),
     );
+    vi.spyOn(providerCredentialRepository, 'findActiveProvider').mockResolvedValue(null as any);
     vi.spyOn(taskQueueManager, 'enqueueTask').mockResolvedValue({} as any);
     vi.spyOn(gitHubService, 'createIssueComment').mockResolvedValue({ id: 123, htmlUrl: 'https://github.com' });
   });

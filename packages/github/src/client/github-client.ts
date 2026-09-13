@@ -161,6 +161,60 @@ export class GitHubService {
     }));
   }
 
+  async listRepositoryIssues(
+    owner: string,
+    repo: string,
+    customAuth?: string,
+  ): Promise<Array<{
+    id: number;
+    number: number;
+    title: string;
+    body: string;
+    state: string;
+    htmlUrl: string;
+    labels: Array<{ id: number; name: string; color: string }>;
+    createdAt: string;
+    updatedAt: string;
+    author: string;
+  }>> {
+    const client = customAuth ? new Octokit({ auth: customAuth }) : this.octokit;
+    this.logger.info({ owner, repo }, 'Fetching open issues for repository');
+
+    try {
+      const res = await client.rest.issues.listForRepo({
+        owner,
+        repo,
+        state: 'open',
+        per_page: 50,
+        sort: 'updated',
+        direction: 'desc',
+      });
+
+      return res.data
+        .filter((issue) => !issue.pull_request)
+        .map((issue) => ({
+          id: issue.id,
+          number: issue.number,
+          title: issue.title,
+          body: issue.body || '',
+          state: issue.state,
+          htmlUrl: issue.html_url,
+          labels: (issue.labels || []).map((l: any) =>
+            typeof l === 'string'
+              ? { id: 0, name: l, color: '666666' }
+              : { id: l.id, name: l.name || '', color: l.color || '666666' },
+          ),
+          createdAt: issue.created_at,
+          updatedAt: issue.updated_at,
+          author: issue.user?.login || 'unknown',
+        }));
+    } catch (err: any) {
+      this.logger.warn({ owner, repo, err: err.message }, 'Failed to fetch issues for repo');
+      return [];
+    }
+  }
+
+
   async createIssueComment(
     owner: string,
     repo: string,
@@ -216,6 +270,43 @@ export class GitHubService {
     } catch (err: any) {
       throw new Error(
         `Failed to create GitHub Pull Request from '${head}' to '${base}': ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  async mergePullRequest(params: {
+    owner: string;
+    repo: string;
+    pullNumber: number;
+    commitTitle?: string;
+    commitMessage?: string;
+    mergeMethod?: 'merge' | 'squash' | 'rebase';
+  }): Promise<{
+    merged: boolean;
+    message: string;
+    sha: string;
+  }> {
+    const { owner, repo, pullNumber, commitTitle, commitMessage, mergeMethod = 'squash' } = params;
+    this.logger.info({ owner, repo, pullNumber, mergeMethod }, 'Merging GitHub Pull Request');
+
+    try {
+      const res = await this.octokit.rest.pulls.merge({
+        owner,
+        repo,
+        pull_number: pullNumber,
+        commit_title: commitTitle,
+        commit_message: commitMessage,
+        merge_method: mergeMethod,
+      });
+
+      return {
+        merged: res.data.merged,
+        message: res.data.message,
+        sha: res.data.sha,
+      };
+    } catch (err: any) {
+      throw new Error(
+        `Failed to merge GitHub Pull Request #${pullNumber}: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }

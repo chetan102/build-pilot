@@ -439,7 +439,18 @@ export class OpenRouterProvider extends BaseLLMProvider {
     }
 
     if (statusCode === 429) {
-      throw new RateLimitError(`OpenRouter rate limit exceeded: ${parsedMessage}`, details);
+      const isQuotaOrCredits =
+        parsedMessage.toLowerCase().includes('free-models-per-day') ||
+        parsedMessage.toLowerCase().includes('credit') ||
+        parsedMessage.toLowerCase().includes('quota') ||
+        parsedMessage.toLowerCase().includes('balance') ||
+        parsedMessage.toLowerCase().includes('exceeded') ||
+        parsedMessage.toLowerCase().includes('unlock');
+
+      throw new RateLimitError(`OpenRouter rate limit exceeded: ${parsedMessage}`, {
+        ...details,
+        retryable: !isQuotaOrCredits,
+      });
     }
 
     if (

@@ -49,7 +49,7 @@ describe('DockerSandboxRunner (Phase 13: Sandbox Execution)', () => {
 
     // Target command
     expect(args).toContain('node:20-alpine');
-    expect(args).toContain('pnpm test');
+    expect(args.join(' ')).toContain('pnpm test');
   });
 
   it('executes via local fallback when requested', async () => {

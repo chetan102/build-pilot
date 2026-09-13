@@ -44,11 +44,13 @@ export class TaskRunRepository {
   async markCompleted(
     id: string,
     durationMs?: number,
+    output?: { finalAnswer?: string; totalSteps?: number; totalTokens?: any },
     completedAt: Date = new Date(),
   ): Promise<ITaskRun | null> {
     return this.updateStatus(id, 'COMPLETED', {
       completedAt,
       durationMs,
+      ...(output ? { output } : {}),
     });
   }
 
@@ -122,6 +124,17 @@ export class TaskRunRepository {
       status: 'RUNNING',
       'heartbeat.leaseExpiresAt': { $lt: thresholdDate },
     }).exec();
+  }
+
+  async update(id: string, extra: Partial<ITaskRun>): Promise<ITaskRun | null> {
+    if (!mongoose.isValidObjectId(id)) {
+      return null;
+    }
+    return TaskRunModel.findByIdAndUpdate(
+      id,
+      { $set: extra },
+      { new: true },
+    ).exec();
   }
 
   async deleteById(id: string): Promise<boolean> {

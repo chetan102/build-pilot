@@ -10,4 +10,6 @@ tasksRouter.get('/:taskId/approvals', (req, res, next) => taskController.listApp
 tasksRouter.post('/:taskId/approvals/:approvalId/decision', (req, res, next) => taskController.submitApprovalDecision(req, res, next));
 tasksRouter.post('/:taskId/cancel', (req, res, next) => taskController.cancelTask(req, res, next));
 tasksRouter.post('/:taskId/retry', (req, res, next) => taskController.retryTask(req, res, next));
+tasksRouter.post('/:taskId/merge-pr', (req, res, next) => taskController.mergePullRequest(req, res, next));
+tasksRouter.delete('/:taskId', (req, res, next) => taskController.deleteTask(req, res, next));
 

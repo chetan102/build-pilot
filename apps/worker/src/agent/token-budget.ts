@@ -2,11 +2,11 @@ import { LLMMessage } from '@buildpilot/llm';
 import { TokenBudgetOptions } from './types.js';
 
 export const DEFAULT_TOKEN_BUDGET: TokenBudgetOptions = {
-  maxContextTokens: 128000,
-  reservedOutputTokens: 4096,
-  maxToolOutputTokens: 8000,
-  maxHistoryMessages: 50,
-  maxFileTreeTokens: 4000,
+  maxContextTokens: 64000,
+  reservedOutputTokens: 2048,
+  maxToolOutputTokens: 1500,
+  maxHistoryMessages: 30,
+  maxFileTreeTokens: 1000,
 };
 
 /**
@@ -177,5 +177,91 @@ export function pruneConversationHistory(
     wasTruncated: droppedCount > 0,
     droppedCount,
   };
+}
+
+/**
+ * Distills older tool outputs in conversation history (Observation Masking).
+ * Keeps the most recent recentToolCount tool responses in full fidelity, while compacting
+ * earlier tool responses (like large file reads or directory listings) into concise semantic summaries.
+ */
+export function distillOlderToolOutputs(
+  history: LLMMessage[],
+  recentToolCount = 2,
+): { messages: LLMMessage[]; distilledCount: number } {
+  const toolIndices: number[] = [];
+  for (let i = 0; i < history.length; i++) {
+    if (history[i]?.role === 'tool') {
+      toolIndices.push(i);
+    }
+  }
+
+  if (toolIndices.length <= recentToolCount) {
+    return { messages: [...history], distilledCount: 0 };
+  }
+
+  // Identify indices of tool messages that should be distilled (all except the last recentToolCount)
+  const indicesToDistill = new Set(toolIndices.slice(0, toolIndices.length - recentToolCount));
+  let distilledCount = 0;
+
+  const messages = history.map((msg, idx) => {
+    if (!indicesToDistill.has(idx) || !msg.content) {
+      return msg;
+    }
+
+    const originalTokens = estimateTokens(msg.content);
+    // If output is already tiny (< 100 tokens), no need to distill
+    if (originalTokens < 100) {
+      return msg;
+    }
+
+    let compactContent = msg.content;
+    try {
+      const parsed = JSON.parse(msg.content);
+      if (parsed.path && parsed.content !== undefined) {
+        // Distill read_file result
+        compactContent = JSON.stringify({
+          path: parsed.path,
+          totalLines: parsed.totalLines || (parsed.content ? parsed.content.split('\n').length : 0),
+          summary: '(File content was inspected in earlier step)',
+        });
+      } else if (Array.isArray(parsed.entries) || (parsed.count && parsed.basePath !== undefined)) {
+        // Distill list_files result
+        compactContent = JSON.stringify({
+          basePath: parsed.basePath || '.',
+          count: parsed.count || parsed.entries?.length || 0,
+          summary: '(Repository directory listing processed in earlier step)',
+        });
+      } else if (Array.isArray(parsed.matches) || parsed.query !== undefined) {
+        // Distill search_code result
+        compactContent = JSON.stringify({
+          query: parsed.query,
+          count: parsed.count || parsed.matches?.length || 0,
+          summary: '(Code search results processed in earlier step)',
+        });
+      } else if (parsed.command && (parsed.stdout !== undefined || parsed.stderr !== undefined)) {
+        // Distill run_command or run_tests result
+        compactContent = JSON.stringify({
+          command: parsed.command,
+          passed: parsed.passed ?? (parsed.exitCode === 0),
+          exitCode: parsed.exitCode,
+          summary: parsed.summary || (parsed.exitCode === 0 ? 'Command succeeded' : 'Command failed'),
+        });
+      } else {
+        // Generic compaction: keep top 200 chars
+        compactContent = truncateMiddle(msg.content, 80).text;
+      }
+    } catch {
+      // Non-JSON content: truncate down to 80 tokens
+      compactContent = truncateMiddle(msg.content, 80).text;
+    }
+
+    distilledCount++;
+    return {
+      ...msg,
+      content: compactContent,
+    };
+  });
+
+  return { messages, distilledCount };
 }
 

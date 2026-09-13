@@ -13,6 +13,7 @@ import {
   TaskStatus,
   validateTaskTransition,
 } from '@buildpilot/domain';
+import { GitHubService } from '@buildpilot/github';
 import { createLogger } from '@buildpilot/observability';
 import { taskQueueManager } from '../queue.js';
 
@@ -50,6 +51,15 @@ export class TaskService {
       throw new EntityNotFoundError('Task', taskId);
     }
     return details;
+  }
+
+  async deleteTask(taskId: string): Promise<boolean> {
+    const task = await taskRepository.findById(taskId);
+    if (!task) {
+      throw new EntityNotFoundError('Task', taskId);
+    }
+    await taskRepository.deleteById(taskId);
+    return true;
   }
 
   async cancelTask(taskId: string, reason?: string): Promise<ITask> {
@@ -193,6 +203,60 @@ export class TaskService {
     }
 
     return updatedApproval;
+  }
+
+  async mergeTaskPullRequest(taskId: string): Promise<{ merged: boolean; message: string; sha?: string }> {
+    const task = await taskRepository.findById(taskId);
+    if (!task) {
+      throw new EntityNotFoundError('Task', taskId);
+    }
+
+    if (!task.prNumber && !task.prUrl) {
+      throw new Error('No Pull Request associated with this task.');
+    }
+
+    const prNumber = task.prNumber || (task.prUrl ? parseInt(task.prUrl.split('/').pop() || '0', 10) : 0);
+    if (!prNumber) {
+      throw new Error('Could not resolve Pull Request number for this task.');
+    }
+
+    const repoName = task.repositoryId;
+    if (!repoName || !repoName.includes('/')) {
+      throw new Error(`Invalid repository identifier: ${repoName}`);
+    }
+
+    const [owner, repo] = repoName.split('/');
+    if (!owner || !repo) {
+      throw new Error(`Invalid repository format: ${repoName}`);
+    }
+
+    const githubToken =
+      (task.metadata as any)?.githubToken ||
+      process.env.GITHUB_TOKEN;
+
+    const ghService = new GitHubService({ auth: githubToken });
+    const result = await ghService.mergePullRequest({
+      owner,
+      repo,
+      pullNumber: prNumber,
+      commitTitle: `Merge pull request #${prNumber} for task: ${task.title}`,
+      commitMessage: `Merged automatically via BuildPilot for Task #${task.issueNumber || task.id}`,
+      mergeMethod: 'squash',
+    });
+
+    await eventRepository.create({
+      taskId,
+      type: 'PULL_REQUEST_MERGED',
+      payload: {
+        prNumber,
+        prUrl: task.prUrl,
+        sha: result.sha,
+        message: result.message,
+      },
+      level: 'info',
+    });
+
+    return result;
   }
 }
 

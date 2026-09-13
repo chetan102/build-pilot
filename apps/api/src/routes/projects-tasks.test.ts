@@ -7,6 +7,7 @@ import {
   taskRepository,
   eventRepository,
   approvalRepository,
+  providerCredentialRepository,
   IProject,
   ITask,
 } from '@buildpilot/database';
@@ -106,6 +107,8 @@ describe('Projects & Tasks Layered API Architecture', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.spyOn(taskQueueManager, 'enqueueTask').mockResolvedValue({ id: 'task_1:run_1' } as any);
+    vi.spyOn(taskRepository, 'listByProject').mockResolvedValue([]);
+    vi.spyOn(providerCredentialRepository, 'findActiveProvider').mockResolvedValue(null as any);
   });
 
   describe('Project Endpoints (Controller -> Service -> Repository)', () => {

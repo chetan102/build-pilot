@@ -50,6 +50,9 @@ importers:
       '@buildpilot/github':
         specifier: workspace:*
         version: link:../../packages/github
+      '@buildpilot/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
       '@buildpilot/observability':
         specifier: workspace:*
         version: link:../../packages/observability

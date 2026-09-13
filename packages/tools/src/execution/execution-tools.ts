@@ -64,18 +64,34 @@ export const runTestsTool = defineTool({
     },
   },
   execute: async (input, context) => {
-    let command = input.testCommand || 'pnpm test';
+    let command = input.testCommand || 'npm test';
     if (input.testFile) {
       command = `${command} ${input.testFile}`;
     }
 
-    const result = await defaultDockerRunner.run({
+    let result = await defaultDockerRunner.run({
       command,
       workspaceDir: context.workspaceDir,
       timeoutMs: input.timeoutMs || 120000,
       signal: context.signal,
       useLocalFallback: process.env.BUILDPILOT_LOCAL_EXEC === 'true' || process.env.NODE_ENV === 'test',
     });
+
+    // If pnpm was not found (exit 127), auto-fallback to npm test or npx
+    if (result.exitCode === 127 && command.startsWith('pnpm test')) {
+      const fallbackCmd = command.replace(/^pnpm test/, 'npm test');
+      const fallbackResult = await defaultDockerRunner.run({
+        command: fallbackCmd,
+        workspaceDir: context.workspaceDir,
+        timeoutMs: input.timeoutMs || 120000,
+        signal: context.signal,
+        useLocalFallback: process.env.BUILDPILOT_LOCAL_EXEC === 'true' || process.env.NODE_ENV === 'test',
+      });
+      if (fallbackResult.exitCode !== 127) {
+        result = fallbackResult;
+        command = fallbackCmd;
+      }
+    }
 
     const passed = result.exitCode === 0;
 

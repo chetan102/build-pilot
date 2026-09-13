@@ -17,6 +17,7 @@
     "@buildpilot/database": "workspace:*",
     "@buildpilot/domain": "workspace:*",
     "@buildpilot/github": "workspace:*",
+    "@buildpilot/llm": "workspace:*",
     "@buildpilot/observability": "workspace:*",
     "@buildpilot/queue": "workspace:*",
     "@buildpilot/shared": "workspace:*",

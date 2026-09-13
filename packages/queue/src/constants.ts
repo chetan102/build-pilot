@@ -4,7 +4,7 @@ export const TASK_EXECUTION_JOB = 'task:execute';
 
 export const DEFAULT_WORKER_CONCURRENCY = 5;
 
-export const DEFAULT_JOB_ATTEMPTS = 3;
+export const DEFAULT_JOB_ATTEMPTS = 1;
 
 export const DEFAULT_BACKOFF_DELAY_MS = 5000;
 

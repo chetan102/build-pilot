@@ -8,13 +8,15 @@ import {
   toolCallRepository,
   eventRepository,
   taskRunRepository,
+  taskRepository,
   AgentStepRepository,
   ToolCallRepository,
   EventRepository,
   TaskRunRepository,
+  TaskRepository,
 } from '@buildpilot/database';
 import { ToolRegistry } from '@buildpilot/tools';
-import { AgentStepStage, ToolCallStatus } from '@buildpilot/domain';
+import { AgentStepStage, ToolCallStatus, TaskStatus } from '@buildpilot/domain';
 import { createLogger, Logger } from '@buildpilot/observability';
 import { ContextBuilder, contextBuilder as defaultContextBuilder } from './context-builder.js';
 import { TaskContext, RepoContext, TokenBudgetOptions } from './types.js';
@@ -35,6 +37,7 @@ export interface AgentLoopOptions {
   toolCallRepository?: ToolCallRepository;
   eventRepository?: EventRepository;
   taskRunRepository?: TaskRunRepository;
+  taskRepository?: TaskRepository;
 }
 
 export interface AgentLoopResult {
@@ -55,6 +58,7 @@ export class AgentCoreLoop {
   private toolCallRepo: ToolCallRepository;
   private eventRepo: EventRepository;
   private taskRunRepo: TaskRunRepository;
+  private taskRepo: TaskRepository;
 
   constructor(private options: AgentLoopOptions = {}) {
     this.logger = options.logger || createLogger({ serviceName: 'agent-core-loop' });
@@ -63,6 +67,7 @@ export class AgentCoreLoop {
     this.toolCallRepo = options.toolCallRepository || toolCallRepository;
     this.eventRepo = options.eventRepository || eventRepository;
     this.taskRunRepo = options.taskRunRepository || taskRunRepository;
+    this.taskRepo = options.taskRepository || taskRepository;
   }
 
   async run(
@@ -70,14 +75,15 @@ export class AgentCoreLoop {
     repo: RepoContext | undefined,
     provider: LLMProvider,
     tools: ToolRegistry,
+    runtimeOptions?: { model?: string; maxSteps?: number; workspaceDir?: string; signal?: AbortSignal },
   ): Promise<AgentLoopResult> {
     const startTime = Date.now();
-    const model = this.options.model || 'anthropic/claude-3.5-sonnet';
-    const maxSteps = this.options.maxSteps || 30;
+    const model = runtimeOptions?.model || this.options.model || (provider as any).config?.defaultModel || 'gpt-4o';
+    const maxSteps = runtimeOptions?.maxSteps || this.options.maxSteps || 30;
     const maxWallClockMs = this.options.maxWallClockMs || 10 * 60 * 1000;
     const perToolTimeoutMs = this.options.perToolTimeoutMs || 30000;
-    const workspaceDir = this.options.workspaceDir || repo?.workspacePath || process.cwd();
-    const signal = this.options.signal;
+    const workspaceDir = runtimeOptions?.workspaceDir || this.options.workspaceDir || repo?.workspacePath || process.cwd();
+    const signal = runtimeOptions?.signal || this.options.signal;
     const loopDetector = new LoopDetector();
 
     const accumulatedUsage: TokenUsage = {
@@ -99,7 +105,7 @@ export class AgentCoreLoop {
       currentStepIndex++;
       const stepStartTime = Date.now();
 
-      // 1. Safety check: Check cancellation signal
+      // 1. Safety check: Check cancellation signal or live DB task status
       if (signal?.aborted) {
         this.logger.warn({ taskId: task.taskId, runId: task.runId }, 'Agent loop aborted by cancellation signal');
         return {
@@ -110,6 +116,23 @@ export class AgentCoreLoop {
           totalTokens: accumulatedUsage,
           durationMs: Date.now() - startTime,
         };
+      }
+
+      try {
+        const liveTask = await this.taskRepo.findById(task.taskId);
+        if (liveTask?.status === TaskStatus.CANCELLED) {
+          this.logger.info({ taskId: task.taskId, runId: task.runId }, 'Task was cancelled in database. Stopping agent loop immediately.');
+          return {
+            success: false,
+            aborted: true,
+            error: 'Task was cancelled by user',
+            totalSteps: currentStepIndex - 1,
+            totalTokens: accumulatedUsage,
+            durationMs: Date.now() - startTime,
+          };
+        }
+      } catch {
+        // ignore non-fatal lookup error
       }
 
       // 2. Safety check: Check wall clock limit

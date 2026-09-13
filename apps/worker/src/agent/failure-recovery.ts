@@ -19,6 +19,20 @@ export function isRetryableError(error: unknown): boolean {
   }
   if (error instanceof Error) {
     const msg = error.message.toLowerCase();
+    if (
+      msg.includes('free-models-per-day') ||
+      msg.includes('insufficient_quota') ||
+      msg.includes('exceeded your current quota') ||
+      msg.includes('credit balance') ||
+      msg.includes('add credits') ||
+      msg.includes('out of credits') ||
+      msg.includes('unlock 1000') ||
+      msg.includes('invalid api key') ||
+      msg.includes('authentication failed') ||
+      msg.includes('no ai api key')
+    ) {
+      return false;
+    }
     return (
       msg.includes('rate limit') ||
       msg.includes('econnreset') ||
@@ -38,7 +52,7 @@ export async function retryWithBackoff<T>(
   operation: () => Promise<T>,
   options: RetryOptions = {},
 ): Promise<T> {
-  const maxRetries = options.maxRetries ?? 3;
+  const maxRetries = options.maxRetries ?? 1;
   const initialDelayMs = options.initialDelayMs ?? 500;
   const backoffFactor = options.backoffFactor ?? 2;
   const maxDelayMs = options.maxDelayMs ?? 10000;
@@ -79,8 +93,8 @@ export class LoopDetector {
   private warningThreshold: number;
 
   constructor(options: { warningThreshold?: number; maxConsecutiveIdenticalFailures?: number } = {}) {
-    this.warningThreshold = options.warningThreshold ?? 3;
-    this.maxConsecutiveIdenticalFailures = options.maxConsecutiveIdenticalFailures ?? 5;
+    this.warningThreshold = options.warningThreshold ?? 1;
+    this.maxConsecutiveIdenticalFailures = options.maxConsecutiveIdenticalFailures ?? 2;
   }
 
   private createFingerprint(name: string, args: unknown): string {

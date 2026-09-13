@@ -14,6 +14,7 @@ import {
   truncateMiddle,
   formatAndTruncateFileTree,
   pruneConversationHistory,
+  distillOlderToolOutputs,
 } from './token-budget.js';
 import { BASE_SYSTEM_PROMPT, formatTaskPrompt, formatRepoContext } from './prompts.js';
 
@@ -69,6 +70,10 @@ export class ContextBuilder {
       if (toolTruncation.wasTruncated) {
         wasTruncated = true;
       }
+
+      // Distill older tool outputs (Observation Masking) to keep prompt tokens frugal
+      const distilled = distillOlderToolOutputs(messages, 2);
+      messages = distilled.messages;
     } else {
       // Create initial user kickoff message
       messages = [this.buildInitialUserMessage(options.task)];

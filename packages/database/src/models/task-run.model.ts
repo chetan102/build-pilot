@@ -33,6 +33,12 @@ export interface ITaskRun {
   completedAt?: Date;
   durationMs?: number;
   errorMessage?: string;
+  diff?: string;
+  output?: {
+    finalAnswer?: string;
+    totalSteps?: number;
+    totalTokens?: any;
+  };
   checkpoint?: ITaskRunCheckpoint;
   heartbeat?: ITaskRunHeartbeat;
   createdAt?: Date;
@@ -57,6 +63,12 @@ export const TaskRunSchema = new Schema<ITaskRun>(
     completedAt: { type: Date },
     durationMs: { type: Number },
     errorMessage: { type: String },
+    diff: { type: String },
+    output: {
+      finalAnswer: { type: String },
+      totalSteps: { type: Number },
+      totalTokens: { type: Schema.Types.Mixed },
+    },
     checkpoint: {
       stage: { type: String },
       stepIndex: { type: Number },

@@ -9,13 +9,11 @@ import {
   RefreshCw,
   Plus,
   Clock,
-  ExternalLink,
   GitBranch,
-  Bot,
-  Layers,
-  Sparkles,
-  ArrowRight,
+  Trash2,
   Filter,
+  Github,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,9 +27,8 @@ import {
   TableHead,
   TableCell,
 } from '@/components/ui/table';
-import { fetchTasks, TaskSummary } from '@/lib/api-client';
-import { MOCK_TASKS } from '@/lib/mock-data';
-import { formatDuration, formatDate } from '@/lib/utils';
+import { fetchTasks, fetchProjects, syncGitHubIssues, deleteTask, TaskSummary } from '@/lib/api-client';
+import { formatDuration } from '@/lib/utils';
 
 export default function TasksPage() {
   const [viewMode, setViewMode] = React.useState<'kanban' | 'table'>('kanban');
@@ -39,10 +36,11 @@ export default function TasksPage() {
   const [statusFilter, setStatusFilter] = React.useState<string>('ALL');
   const [tasks, setTasks] = React.useState<TaskSummary[]>([]);
   const [loading, setLoading] = React.useState<boolean>(true);
-  const [isUsingFallback, setIsUsingFallback] = React.useState<boolean>(false);
+  const [syncing, setSyncing] = React.useState<boolean>(false);
+  const [syncNotice, setSyncNotice] = React.useState<string | null>(null);
 
-  const loadTasks = React.useCallback(async () => {
-    setLoading(true);
+  const loadTasks = React.useCallback(async (isInitial = false) => {
+    if (isInitial) setLoading(true);
     try {
       const res = await fetchTasks({
         search: searchQuery || undefined,
@@ -50,62 +48,41 @@ export default function TasksPage() {
         limit: 100,
       });
 
-      if (res.tasks && res.tasks.length > 0) {
-        setTasks(res.tasks);
-        setIsUsingFallback(false);
-      } else {
-        setTasks(
-          MOCK_TASKS.map((m) => ({
-            _id: m.id,
-            id: m.id,
-            projectId: 'proj_mock',
-            repositoryId: m.repository,
-            issueNumber: m.issueNumber,
-            title: m.title,
-            description: m.description,
-            status: m.status,
-            branch: m.branch,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            durationMs: m.durationMs,
-            model: m.model,
-            provider: m.provider,
-            prUrl: m.prUrl,
-            prNumber: m.prNumber,
-          })),
-        );
-        setIsUsingFallback(true);
-      }
-    } catch {
-      setTasks(
-        MOCK_TASKS.map((m) => ({
-          _id: m.id,
-          id: m.id,
-          projectId: 'proj_mock',
-          repositoryId: m.repository,
-          issueNumber: m.issueNumber,
-          title: m.title,
-          description: m.description,
-          status: m.status,
-          branch: m.branch,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          durationMs: m.durationMs,
-          model: m.model,
-          provider: m.provider,
-          prUrl: m.prUrl,
-          prNumber: m.prNumber,
-        })),
-      );
-      setIsUsingFallback(true);
+      setTasks(res.tasks || []);
+    } catch (err) {
+      console.warn('Could not fetch tasks:', err);
+      if (isInitial) setTasks([]);
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   }, [searchQuery, statusFilter]);
 
   React.useEffect(() => {
-    loadTasks();
+    loadTasks(true);
   }, [loadTasks]);
+
+  React.useEffect(() => {
+    const hasActiveTasks = tasks.some(t => ['QUEUED', 'PLANNING', 'DEVELOPMENT', 'TESTING', 'AWAITING_APPROVAL'].includes(t.status));
+    if (!hasActiveTasks) return;
+
+    const interval = setInterval(() => {
+      loadTasks(false);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [tasks, loadTasks]);
+
+  const handleDeleteTask = async (e: React.MouseEvent, taskId: string, taskTitle: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm(`Are you sure you want to permanently delete task "${taskTitle}"?`)) return;
+    try {
+      await deleteTask(taskId);
+      await loadTasks();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      alert(msg || 'Failed to delete task');
+    }
+  };
 
   const filteredTasks = tasks.filter((task) => {
     const matchesSearch =
@@ -154,8 +131,96 @@ export default function TasksPage() {
     },
   ];
 
+  const handleSyncGitHubIssues = async () => {
+    try {
+      setSyncing(true);
+      setSyncNotice(null);
+      const token = typeof window !== 'undefined' ? localStorage.getItem('bp_github_token') || undefined : undefined;
+
+      // 1. Fetch projects to know which repos to sync
+      const projectsRes = await fetchProjects();
+      const allProjects = projectsRes.projects || [];
+      let totalSynced = 0;
+      const reposChecked: string[] = [];
+
+      // 2. If no projects imported yet, try to auto-discover repos from connected GitHub OAuth account
+      if (allProjects.length === 0 && token) {
+        try {
+          const { fetchGitHubRepositories } = await import('@/lib/api-client');
+          const repoRes = await fetchGitHubRepositories(token);
+          if (repoRes.repositories && repoRes.repositories.length > 0) {
+            // Find relevant sandbox repo or active repos
+            const targetRepos = repoRes.repositories.filter(
+              (r) => r.fullName.includes('sandbox') || r.fullName.includes('buildpilot') || repoRes.repositories.length <= 5
+            );
+
+            for (const r of targetRepos) {
+              const [owner, repo] = r.fullName.split('/');
+              if (owner && repo) {
+                reposChecked.push(r.fullName);
+                // Try buildpilot tag first, then ALL open issues
+                let res = await syncGitHubIssues(owner, repo, token, 'buildpilot');
+                if (res.syncedCount === 0) {
+                  res = await syncGitHubIssues(owner, repo, token, 'ALL');
+                }
+                totalSynced += res.syncedCount || 0;
+              }
+            }
+          }
+        } catch (autoErr: any) {
+          console.warn('Auto repo discovery failed:', autoErr.message);
+        }
+      } else {
+        for (const p of allProjects) {
+          const repoFullName = p.githubRepoFullName || p.name;
+          if (repoFullName && repoFullName.includes('/')) {
+            const [owner, repo] = repoFullName.split('/');
+            if (owner && repo) {
+              reposChecked.push(repoFullName);
+              try {
+                // Try buildpilot label first
+                let res = await syncGitHubIssues(owner, repo, token, 'buildpilot');
+                if (res.syncedCount === 0) {
+                  // Also check all open issues if none tagged buildpilot
+                  res = await syncGitHubIssues(owner, repo, token, 'ALL');
+                }
+                totalSynced += res.syncedCount || 0;
+              } catch (err: any) {
+                console.warn(`Could not sync ${repoFullName}:`, err.message);
+              }
+            }
+          }
+        }
+      }
+
+      await loadTasks();
+
+      if (totalSynced > 0) {
+        setSyncNotice(`🎉 Successfully imported and queued ${totalSynced} issue(s) from GitHub! Agent is now processing.`);
+      } else if (reposChecked.length > 0) {
+        setSyncNotice(`ℹ️ Checked GitHub (${reposChecked.join(', ')}). All open issues are already synced or no open issues found.`);
+      } else {
+        setSyncNotice(`ℹ️ No GitHub projects found. Please go to Projects (/projects) to connect GitHub and import your repository.`);
+      }
+    } catch (err: any) {
+      setSyncNotice(`⚠️ Failed to sync issues: ${err.message}`);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-[1600px] mx-auto pb-12">
+      {/* Sync Notification Banner */}
+      {syncNotice && (
+        <div className="p-3 bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs rounded-xl flex items-center justify-between font-medium">
+          <span>{syncNotice}</span>
+          <button onClick={() => setSyncNotice(null)} className="text-indigo-500 hover:text-indigo-700 font-bold px-1.5">
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-200/80">
         <div>
@@ -164,11 +229,6 @@ export default function TasksPage() {
               <Kanban className="h-6 w-6 text-indigo-600" />
               Autonomous Task Board
             </h1>
-            {isUsingFallback && (
-              <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-300 bg-amber-50">
-                Demo Data Mode
-              </Badge>
-            )}
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
             Real-time pipeline tracking engineering tasks through Planner, Developer, and Reviewer loops.
@@ -177,8 +237,18 @@ export default function TasksPage() {
 
         {/* View Switcher & Action Controls */}
         <div className="flex items-center gap-2.5">
+          <Button
+            size="sm"
+            onClick={handleSyncGitHubIssues}
+            disabled={syncing}
+            className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 shadow-sm font-semibold rounded-xl"
+          >
+            <Github className={`h-3.5 w-3.5 ${syncing ? 'animate-spin text-white' : ''}`} />
+            <span>{syncing ? 'Syncing GitHub...' : 'Sync GitHub Issues'}</span>
+          </Button>
+
           <Link href="/projects">
-            <Button size="sm" className="h-8 text-xs bg-slate-900 hover:bg-slate-800 text-white gap-1.5 shadow-sm">
+            <Button size="sm" className="h-8 text-xs bg-slate-900 hover:bg-slate-800 text-white gap-1.5 shadow-sm rounded-xl">
               <Plus className="h-3.5 w-3.5" />
               <span>New Task</span>
             </Button>
@@ -291,14 +361,24 @@ export default function TasksPage() {
                       <Link key={taskId} href={`/tasks/${taskId}`} className="block group">
                         <Card className="bg-white border-slate-200/90 shadow-xs hover:shadow-md hover:border-indigo-300 transition-all cursor-pointer rounded-xl overflow-hidden">
                           <CardContent className="p-4 space-y-3">
-                            {/* Card Top: Issue number & Repo tag */}
+                            {/* Card Top: Issue number & Repo tag + Delete */}
                             <div className="flex items-center justify-between text-xs">
                               <span className="font-mono font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100 text-[11px]">
                                 #{task.issueNumber || 1}
                               </span>
-                              <span className="text-[11px] font-medium text-slate-500 truncate max-w-[150px]" title={task.repositoryId}>
-                                {task.repositoryId}
-                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[11px] font-medium text-slate-500 truncate max-w-[120px]" title={task.repositoryId}>
+                                  {task.repositoryId}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => handleDeleteTask(e, taskId, task.title)}
+                                  className="text-slate-400 hover:text-red-600 p-1 rounded-md hover:bg-red-50 transition"
+                                  title="Delete task"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              </div>
                             </div>
 
                             {/* Card Title */}
@@ -334,7 +414,7 @@ export default function TasksPage() {
                             {/* Card Footer: Model + Runtime */}
                             <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
                               <span className="truncate max-w-[120px] font-medium text-slate-500">
-                                {task.model?.split('/')[1] || task.model || 'claude-3.5-sonnet'}
+                                {task.model || 'Configured Model'}
                               </span>
                               <div className="flex items-center gap-1 font-semibold text-slate-600">
                                 <Clock className="h-3 w-3 text-slate-400" />
@@ -368,57 +448,76 @@ export default function TasksPage() {
                 <TableHead className="w-40 font-bold text-xs">Stage Status</TableHead>
                 <TableHead className="w-48 font-bold text-xs">Model & Branch</TableHead>
                 <TableHead className="w-32 font-bold text-xs">Runtime</TableHead>
-                <TableHead className="w-24 text-right font-bold text-xs">Inspect</TableHead>
+                <TableHead className="w-32 text-right font-bold text-xs">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredTasks.map((task) => {
-                const taskId = task._id || task.id;
-                return (
-                  <TableRow key={taskId} className="hover:bg-slate-50/70 transition-colors">
-                    <TableCell className="font-mono font-bold text-xs text-indigo-600">
-                      #{task.issueNumber || 1}
-                    </TableCell>
-                    <TableCell>
-                      <Link
-                        href={`/tasks/${taskId}`}
-                        className="font-bold text-xs text-slate-900 hover:text-indigo-600 transition-colors block"
-                      >
-                        {task.title}
-                      </Link>
-                      <span className="text-[11px] text-slate-400">{task.repositoryId}</span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          task.status === 'COMPLETED'
-                            ? 'success'
-                            : task.status === 'AWAITING_APPROVAL'
-                              ? 'destructive'
-                              : 'default'
-                        }
-                        className="text-[10px] font-bold"
-                      >
-                        {task.status.replace(/_/g, ' ')}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-600">
-                      <p className="font-medium text-[11px] text-slate-700">{task.model || 'claude-3.5-sonnet'}</p>
-                      <p className="text-[10px] text-slate-400 font-mono">{task.branch}</p>
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-500 font-medium">
-                      {task.durationMs ? formatDuration(task.durationMs) : '0s'}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Link href={`/tasks/${taskId}`}>
-                        <Button variant="outline" size="sm" className="text-xs h-7 px-2.5">
-                          Inspect
-                        </Button>
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {filteredTasks.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-12 text-xs text-slate-400">
+                    No tasks found. Launch a task from the Projects page to get started.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredTasks.map((task) => {
+                  const taskId = task._id || task.id;
+                  return (
+                    <TableRow key={taskId} className="hover:bg-slate-50/70 transition-colors">
+                      <TableCell className="font-mono font-bold text-xs text-indigo-600">
+                        #{task.issueNumber || 1}
+                      </TableCell>
+                      <TableCell>
+                        <Link
+                          href={`/tasks/${taskId}`}
+                          className="font-bold text-xs text-slate-900 hover:text-indigo-600 transition-colors block"
+                        >
+                          {task.title}
+                        </Link>
+                        <span className="text-[11px] text-slate-400">{task.repositoryId}</span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            task.status === 'COMPLETED'
+                              ? 'success'
+                              : task.status === 'AWAITING_APPROVAL'
+                                ? 'destructive'
+                                : 'default'
+                          }
+                          className="text-[10px] font-bold"
+                        >
+                          {task.status.replace(/_/g, ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-600">
+                        <p className="font-medium text-[11px] text-slate-700">{task.model || 'Configured Model'}</p>
+                        <p className="text-[10px] text-slate-400 font-mono">{task.branch}</p>
+                      </TableCell>
+                      <TableCell className="text-xs text-slate-500 font-medium">
+                        {task.durationMs ? formatDuration(task.durationMs) : '0s'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Link href={`/tasks/${taskId}`}>
+                            <Button variant="outline" size="sm" className="text-xs h-7 px-2.5">
+                              Inspect
+                            </Button>
+                          </Link>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => handleDeleteTask(e, taskId, task.title)}
+                            className="text-xs h-7 px-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50"
+                            title="Delete task"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
             </TableBody>
           </Table>
         </div>

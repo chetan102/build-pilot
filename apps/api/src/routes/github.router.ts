@@ -1,8 +1,10 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import mongoose from 'mongoose';
 import { z } from 'zod';
 import { gitHubService } from '@buildpilot/github';
-import { projectRepository } from '@buildpilot/database';
-import { repositoryRepository } from '@buildpilot/database';
+import { projectRepository, repositoryRepository, taskRepository, eventRepository, providerCredentialRepository } from '@buildpilot/database';
+import { taskQueueManager } from '../queue.js';
+import { TaskStatus, LLMProviderType } from '@buildpilot/domain';
 import { secretsManager } from '@buildpilot/shared';
 import { createLogger } from '@buildpilot/observability';
 import { webhooksRouter } from './webhooks.router.js';
@@ -220,6 +222,193 @@ githubRouter.get('/repos', async (req: Request, res: Response, next: NextFunctio
     });
   }
 });
+
+/**
+ * GET /api/v1/github/repos/:owner/:repo/issues
+ * Fetches open issues from a GitHub repository using OAuth or provided token
+ */
+githubRouter.get('/repos/:owner/:repo/issues', async (req: Request, res: Response) => {
+  try {
+    const { owner, repo } = req.params;
+    const token = (req.query.token as string) || extractGitHubToken(req);
+
+    const issues = await gitHubService.listRepositoryIssues(owner, repo, token);
+    return res.status(200).json({
+      issues,
+      count: issues.length,
+    });
+  } catch (err: any) {
+    logger.error({ err, owner: req.params.owner, repo: req.params.repo }, 'Failed to fetch issues');
+    return res.status(500).json({
+      error: `Failed to fetch GitHub issues: ${err.message}`,
+      issues: [],
+    });
+  }
+});
+
+/**
+ * POST /api/v1/github/repos/:owner/:repo/sync-issues
+ * Syncs open issues from GitHub (e.g. labeled buildpilot), creates tasks in MongoDB, and enqueues them.
+ */
+githubRouter.post('/repos/:owner/:repo/sync-issues', async (req: Request, res: Response) => {
+  try {
+    const { owner, repo } = req.params;
+    const token = (req.body.token as string) || extractGitHubToken(req);
+    const repoFullName = `${owner}/${repo}`;
+    const tagFilter = (req.body.tag as string) || 'buildpilot';
+
+    const allIssues = await gitHubService.listRepositoryIssues(owner, repo, token);
+    const eligibleIssues = allIssues.filter((issue) => {
+      if (!tagFilter || tagFilter === 'ALL') return true;
+      return issue.labels?.some((l) => l.name.toLowerCase() === tagFilter.toLowerCase());
+    });
+
+    // Ensure project exists
+    const projectSlug = repoFullName.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    let project = await projectRepository.findBySlug(projectSlug);
+    if (!project) {
+      project = await projectRepository.create({
+        name: repoFullName,
+        slug: projectSlug,
+        ownerId: owner,
+        active: true,
+        githubRepoFullName: repoFullName,
+      });
+    }
+
+    const projectId = (project as any)._id?.toString() || projectSlug;
+    // Resolve active provider from database if configured by user
+    let defaultProvider: LLMProviderType = LLMProviderType.OPENROUTER;
+    let defaultModel: string = 'anthropic/claude-3.5-sonnet';
+    try {
+      const activeCred = await providerCredentialRepository.findActiveProvider('default-user');
+      if (activeCred) {
+        defaultProvider = activeCred.provider as LLMProviderType;
+        defaultModel = activeCred.defaultModel || defaultModel;
+      }
+    } catch {
+      // ignore lookup error
+    }
+
+    for (const issue of eligibleIssues) {
+      // Check if task already exists for this issue
+      const existingTask = await taskRepository.findByRepoAndIssue(repoFullName, issue.number);
+      if (existingTask) {
+        // If task is still in QUEUED state (e.g. was queued before worker started or recovered), re-enqueue it
+        if (existingTask.status === TaskStatus.QUEUED) {
+          const runId = new mongoose.Types.ObjectId().toString();
+          const taskId = (existingTask as any)._id?.toString() || existingTask.id;
+          const meta = (existingTask.metadata as Record<string, any>) || {};
+
+          // Update token in metadata if new token supplied
+          if (token && meta.githubToken !== token) {
+            await taskRepository.updateMetadata(taskId, { ...meta, githubToken: token });
+          }
+
+          await taskQueueManager.enqueueTask({
+            taskId,
+            runId,
+            projectId: existingTask.projectId || projectId,
+            repositoryId: repoFullName,
+            issueNumber: issue.number,
+            title: existingTask.title,
+            description: existingTask.description,
+            branch: existingTask.branch,
+            baseBranch: existingTask.baseBranch || 'main',
+            provider: meta.provider || defaultProvider,
+            model: meta.model || defaultModel,
+            maxSteps: 30,
+            metadata: {
+              ...meta,
+              githubToken: token || meta.githubToken || undefined,
+            },
+          });
+
+          createdTasks.push(existingTask);
+        }
+        continue;
+      }
+
+      const branchName = `buildpilot/task-${issue.number}-${Date.now().toString(36)}`;
+      const task = await taskRepository.create({
+        projectId,
+        repositoryId: repoFullName,
+        issueNumber: issue.number,
+        title: issue.title,
+        description: issue.body || 'No description provided.',
+        status: TaskStatus.QUEUED,
+        branch: branchName,
+        baseBranch: 'main',
+        tags: ['github', 'sync', tagFilter],
+        metadata: {
+          source: 'GITHUB_SYNC',
+          githubIssueUrl: issue.htmlUrl,
+          githubToken: token || undefined,
+          provider: defaultProvider,
+          model: defaultModel,
+        },
+      });
+
+      const taskId = (task as any)._id?.toString() || `task_${Date.now()}`;
+      const runId = new mongoose.Types.ObjectId().toString();
+
+      await taskQueueManager.enqueueTask({
+        taskId,
+        runId,
+        projectId,
+        repositoryId: repoFullName,
+        issueNumber: issue.number,
+        title: task.title,
+        description: task.description,
+        branch: branchName,
+        baseBranch: 'main',
+        provider: defaultProvider,
+        model: defaultModel,
+        maxSteps: 30,
+        metadata: {
+          githubToken: token || undefined,
+          provider: defaultProvider,
+          model: defaultModel,
+        },
+      });
+
+      // Post comment on GitHub issue
+      try {
+        if (token) {
+          await gitHubService.createIssueComment(
+            owner,
+            repo,
+            issue.number,
+            `🤖 **BuildPilot Control Plane** has picked up this task via direct Sync!\n- Task ID: \`${taskId}\`\n- Branch: \`${branchName}\`\n- Tracking real-time progress at: ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/tasks/${taskId}`,
+          );
+        }
+      } catch (commentErr: any) {
+        logger.warn({ commentErr: commentErr.message }, 'Could not post GitHub acknowledgment comment');
+      }
+
+      createdTasks.push(task);
+    }
+
+    return res.status(200).json({
+      success: true,
+      syncedCount: createdTasks.length,
+      totalEligible: eligibleIssues.length,
+      tasks: createdTasks,
+      message:
+        createdTasks.length > 0
+          ? `Successfully synced and enqueued ${createdTasks.length} task(s) from GitHub!`
+          : eligibleIssues.length > 0
+          ? `All ${eligibleIssues.length} issue(s) are already synced as tasks.`
+          : `No open issues matching label '${tagFilter}' found on GitHub repository.`,
+    });
+  } catch (err: any) {
+    logger.error({ err }, 'Failed to sync GitHub issues');
+    return res.status(500).json({
+      error: `Failed to sync GitHub issues: ${err.message}`,
+    });
+  }
+});
+
 
 const ImportRepoSchema = z.object({
   repoFullName: z.string().min(1, 'Repository full name is required (e.g. owner/repo)'),

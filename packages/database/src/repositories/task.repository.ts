@@ -2,6 +2,9 @@ import mongoose from 'mongoose';
 import { TaskModel, ITask } from '../models/task.model.js';
 import { TaskRunModel, ITaskRun } from '../models/task-run.model.js';
 import { AgentStepModel, IAgentStep } from '../models/agent-step.model.js';
+import { ToolCallModel, IToolCall } from '../models/tool-call.model.js';
+import { EventModel } from '../models/event.model.js';
+import { ApprovalModel } from '../models/approval.model.js';
 import { TaskStatusType } from '@buildpilot/domain';
 
 export interface ListTasksFilter {
@@ -20,6 +23,7 @@ export interface TaskDetailsResult {
   task: ITask;
   runs: ITaskRun[];
   steps: IAgentStep[];
+  toolCalls?: IToolCall[];
 }
 
 export class TaskRepository {
@@ -28,7 +32,7 @@ export class TaskRepository {
   }
 
   async findById(id: string): Promise<ITask | null> {
-    if (!mongoose.isValidObjectId(id)) {
+    if (!mongoose.isValidObjectId(id) || mongoose.connection.readyState !== 1) {
       return null;
     }
     return TaskModel.findById(id).exec();
@@ -89,12 +93,49 @@ export class TaskRepository {
       return null;
     }
 
-    const [runs, steps] = await Promise.all([
+    const [runs, steps, toolCalls] = await Promise.all([
       TaskRunModel.find({ taskId }).sort({ createdAt: -1 }).exec(),
       AgentStepModel.find({ taskId }).sort({ createdAt: 1 }).exec(),
+      ToolCallModel.find({
+        $or: [
+          { taskId },
+          { runId: { $in: (await TaskRunModel.find({ taskId }).select('_id').exec()).map((r) => r._id?.toString() || '') } },
+        ],
+      }).sort({ createdAt: 1 }).exec(),
     ]);
 
-    return { task, runs, steps };
+    const taskObj = typeof (task as any).toObject === 'function' ? (task as any).toObject() : task;
+    const model = runs[0]?.model || taskObj.metadata?.model || undefined;
+    const provider = runs[0]?.provider || taskObj.metadata?.provider || undefined;
+
+    // Attach toolCalls to their corresponding steps
+    const stepsWithTools = steps.map((step) => {
+      const stepObj = typeof (step as any).toObject === 'function' ? (step as any).toObject() : step;
+      const stepId = stepObj._id?.toString() || '';
+      const matchedTools = toolCalls.filter((tc) => tc.stepId === stepId || tc.stepId === `step_${stepObj._id}`);
+      return {
+        ...stepObj,
+        toolCalls: matchedTools,
+      };
+    });
+
+    const finalAnswer =
+      runs[0]?.output?.finalAnswer ||
+      runs[0]?.checkpoint?.summary ||
+      taskObj.metadata?.finalAnswer ||
+      undefined;
+
+    return {
+      task: {
+        ...taskObj,
+        model,
+        provider,
+        finalAnswer,
+      },
+      runs,
+      steps: stepsWithTools as any,
+      toolCalls,
+    };
   }
 
   async updateStatus(
@@ -133,7 +174,13 @@ export class TaskRepository {
     if (!mongoose.isValidObjectId(id)) {
       return false;
     }
-    const res = await TaskModel.findByIdAndDelete(id).exec();
+    const [res] = await Promise.all([
+      TaskModel.findByIdAndDelete(id).exec(),
+      TaskRunModel.deleteMany({ taskId: id }).exec(),
+      AgentStepModel.deleteMany({ taskId: id }).exec(),
+      EventModel.deleteMany({ taskId: id }).exec(),
+      ApprovalModel.deleteMany({ taskId: id }).exec(),
+    ]);
     return res !== null;
   }
 }

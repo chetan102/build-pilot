@@ -90,18 +90,19 @@ describe('Failure Recovery: retryWithBackoff & LoopDetector', () => {
       expect(res2.isLoop).toBe(false);
     });
 
-    it('triggers warning at 3 consecutive identical failures', () => {
-      const detector = new LoopDetector({ warningThreshold: 3 });
-      detector.recordCall('run_cmd', { cmd: 'npm test' }, false);
-      detector.recordCall('run_cmd', { cmd: 'npm test' }, false);
-      const res3 = detector.recordCall('run_cmd', { cmd: 'npm test' }, false);
+    it('triggers warning at 1 failure and loop termination at 2 consecutive failures by default', () => {
+      const detector = new LoopDetector();
+      const res1 = detector.recordCall('run_cmd', { cmd: 'npm test' }, false);
+      expect(res1.shouldWarn).toBe(true);
+      expect(res1.isLoop).toBe(false);
+      expect(res1.count).toBe(1);
 
-      expect(res3.shouldWarn).toBe(true);
-      expect(res3.isLoop).toBe(false);
-      expect(res3.count).toBe(3);
+      const res2 = detector.recordCall('run_cmd', { cmd: 'npm test' }, false);
+      expect(res2.isLoop).toBe(true);
+      expect(res2.count).toBe(2);
     });
 
-    it('triggers loop termination at 5 consecutive identical failures', () => {
+    it('respects custom warning and loop thresholds', () => {
       const detector = new LoopDetector({ warningThreshold: 3, maxConsecutiveIdenticalFailures: 5 });
       for (let i = 0; i < 4; i++) {
         detector.recordCall('run_cmd', { cmd: 'broken' }, false);
