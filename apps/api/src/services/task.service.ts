@@ -2,6 +2,7 @@ import {
   taskRepository,
   eventRepository,
   approvalRepository,
+  providerCredentialRepository,
   ITask,
   ListTasksFilter,
   TaskPaginationOptions,
@@ -123,6 +124,24 @@ export class TaskService {
     // Enqueue task for background worker retry execution
     try {
       const runId = new mongoose.Types.ObjectId().toString();
+      const meta = { ...((task.metadata as Record<string, unknown>) || {}) };
+      let taskProvider = meta.provider as string | undefined;
+      let taskModel = meta.model as string | undefined;
+
+      if (taskProvider && /^[0-9a-fA-F]{24}$/.test(String(taskProvider))) {
+        meta.credentialId = taskProvider;
+        try {
+          const cred = await providerCredentialRepository.findById(taskProvider);
+          if (cred) {
+            taskProvider = cred.provider;
+            meta.baseUrl = cred.baseUrl;
+            taskModel = taskModel || cred.defaultModel;
+          }
+        } catch {
+          // ignore lookup error
+        }
+      }
+
       await taskQueueManager.enqueueTask({
         taskId,
         runId,
@@ -133,7 +152,9 @@ export class TaskService {
         description: task.description,
         branch: task.branch,
         baseBranch: task.baseBranch,
-        metadata: (task.metadata as Record<string, unknown>) || {},
+        provider: taskProvider,
+        model: taskModel,
+        metadata: meta,
       });
       createLogger({ serviceName: 'task-service' }).info(
         { taskId, branch: task.branch },

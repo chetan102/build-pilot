@@ -112,6 +112,8 @@ export class AgentCoreLoop {
     // Count consecutive steps with no write_file — stall detection
     let stepsSinceLastWrite = 0;
     const STALL_THRESHOLD = 6; // kill the loop if agent reads/explores for 6 steps without writing
+    // Circuit breaker: Count consecutive failed test runs to prevent test-retry panic loops
+    let consecutiveTestFailures = 0;
     const sandboxCapabilities = runtimeOptions?.sandboxCapabilities || this.options.sandboxCapabilities;
 
     this.logger.info(
@@ -388,6 +390,16 @@ export class AgentCoreLoop {
           }
         }
 
+        if (toolCall.name === 'run_tests' && consecutiveTestFailures >= 3) {
+          isIntercepted = true;
+          toolResult = {
+            passed: false,
+            circuitBreaker: true,
+            summary: '[CIRCUIT BREAKER ACTIVATED]: Test execution stopped after 3 consecutive test failures to prevent token exhaustion. Do NOT retry running tests. Call create_pull_request now with a summary of your implemented code changes.',
+          };
+          pendingWarnings.push('[URGENT MANDATE]: Test retry limit reached. You MUST call create_pull_request immediately to finalize your task and propose the changes.');
+        }
+
         // Execute tool with per-tool timeout (or use intercepted result)
         this.logger.info({ tool: toolCall.name, args: toolCall.arguments, isIntercepted }, 'Executing tool');
         try {
@@ -455,6 +467,21 @@ export class AgentCoreLoop {
           // Also track list_files calls — agent already knows the directory listing
           if (toolCall.name === 'list_files' && !isIntercepted) {
             readFileTracker.set('__list_files__', { lines: 0, step: currentStepIndex });
+          }
+
+          // Track test outcomes to break loops
+          if (toolCall.name === 'run_tests') {
+            const isPassed = (toolResult as any)?.passed === true;
+            if (!isPassed && !isIntercepted) {
+              consecutiveTestFailures++;
+              if (consecutiveTestFailures === 2) {
+                pendingWarnings.push(
+                  '[SYSTEM ADVISORY]: Tests have failed 2 consecutive times. If this is due to an environment or transpiler limitation (e.g. running JSX in native Node without Babel/Vite, missing browser DOM, or unsupported syntax), do NOT keep trying variations of the test. Either write pure standard Node-compatible unit tests without JSX, or call create_pull_request to finalize your code changes.'
+                );
+              }
+            } else if (isPassed) {
+              consecutiveTestFailures = 0;
+            }
           }
 
           const stringifiedResult = typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult);

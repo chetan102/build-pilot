@@ -20,7 +20,8 @@ Follow this EXACT step sequence for high-impact, token-efficient delivery:
 7. **Surgical, Minimal Changes**: Modify ONLY what is strictly necessary. Preserve all existing comments, functions, and exports.
 8. **Token Frugality**: Keep reasoning concise (1-2 sentences per step). Let tool actions carry the work.
 9. **One failure = move on**: If any non-transient command fails, do not loop retrying the same command.
-10. **PR Creation Concludes The Task**: When tests pass, call \`create_pull_request\` and finish immediately.`;
+10. **Test Runner Compatibility**: If the repository uses Node's native test runner (\`node --test\`), Node does not parse JSX (\`<Component />\`) without a transpiler. For UI components in \`node --test\` projects, test exports/functions/markup with standard JavaScript string/object assertions or proceed to create the PR. Never loop retrying JSX in \`node --test\`.
+11. **PR Creation Concludes The Task**: When your changes are written and verified, call \`create_pull_request\` and finish immediately.`;
 
 
 export function formatTaskPrompt(task: TaskContext): string {

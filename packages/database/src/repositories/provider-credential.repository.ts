@@ -3,19 +3,28 @@ import { LLMProviderKind } from '@buildpilot/domain';
 
 export class ProviderCredentialRepository {
   async findByUserId(userId: string = 'default-user'): Promise<IProviderCredential[]> {
-    return ProviderCredentialModel.find({ userId }).lean();
+    return ProviderCredentialModel.find({ userId }).sort({ createdAt: -1 }).lean();
   }
 
-  async findActiveProvider(userId: string = 'default-user', provider?: LLMProviderKind): Promise<IProviderCredential | null> {
+  async findById(id: string): Promise<IProviderCredential | null> {
+    return ProviderCredentialModel.findById(id).lean();
+  }
+
+  async findActiveProvider(userId: string = 'default-user', provider?: LLMProviderKind, id?: string): Promise<IProviderCredential | null> {
     const query: any = { userId, isActive: true };
+    if (id) {
+      return ProviderCredentialModel.findOne({ _id: id, ...query }).lean();
+    }
     if (provider) {
       query.provider = provider;
     }
-    return ProviderCredentialModel.findOne(query).lean();
+    return ProviderCredentialModel.findOne(query).sort({ updatedAt: -1 }).lean();
   }
 
   async upsertCredential(data: {
+    id?: string;
     userId?: string;
+    name?: string;
     provider: LLMProviderKind;
     apiKeyEncrypted: string;
     baseUrl?: string;
@@ -24,27 +33,68 @@ export class ProviderCredentialRepository {
     isActive?: boolean;
   }): Promise<IProviderCredential> {
     const userId = data.userId || 'default-user';
-    return ProviderCredentialModel.findOneAndUpdate(
-      { userId, provider: data.provider },
-      {
-        ...data,
-        userId,
-        isActive: data.isActive ?? true,
-      },
-      { upsert: true, new: true },
-    ).lean() as unknown as IProviderCredential;
+    const name = data.name || `${data.provider} Setup`;
+
+    if (data.id) {
+      return ProviderCredentialModel.findByIdAndUpdate(
+        data.id,
+        {
+          ...data,
+          name,
+          userId,
+          isActive: data.isActive ?? true,
+        },
+        { new: true },
+      ).lean() as unknown as IProviderCredential;
+    }
+
+    // Try finding by name + userId
+    const existing = await ProviderCredentialModel.findOne({ userId, name });
+    if (existing) {
+      return ProviderCredentialModel.findByIdAndUpdate(
+        existing._id,
+        {
+          ...data,
+          name,
+          userId,
+          isActive: data.isActive ?? true,
+        },
+        { new: true },
+      ).lean() as unknown as IProviderCredential;
+    }
+
+    return ProviderCredentialModel.create({
+      ...data,
+      name,
+      userId,
+      isActive: data.isActive ?? true,
+    }) as unknown as IProviderCredential;
   }
 
-  async updateActiveStatus(provider: LLMProviderKind, isActive: boolean, userId: string = 'default-user'): Promise<IProviderCredential | null> {
+  async updateActiveStatus(idOrProvider: string, isActive: boolean, userId: string = 'default-user'): Promise<IProviderCredential | null> {
+    let query: any = { userId };
+    if (idOrProvider.length === 24 && /^[0-9a-fA-F]+$/.test(idOrProvider)) {
+      query._id = idOrProvider;
+    } else {
+      query.provider = idOrProvider;
+    }
+
     return ProviderCredentialModel.findOneAndUpdate(
-      { userId, provider },
+      query,
       { isActive },
       { new: true },
     ).lean() as unknown as IProviderCredential | null;
   }
 
-  async deleteCredential(provider: LLMProviderKind, userId: string = 'default-user'): Promise<boolean> {
-    const result = await ProviderCredentialModel.deleteOne({ userId, provider });
+  async deleteCredential(idOrProvider: string, userId: string = 'default-user'): Promise<boolean> {
+    let query: any = { userId };
+    if (idOrProvider.length === 24 && /^[0-9a-fA-F]+$/.test(idOrProvider)) {
+      query._id = idOrProvider;
+    } else {
+      query.provider = idOrProvider;
+    }
+
+    const result = await ProviderCredentialModel.deleteOne(query);
     return result.deletedCount > 0;
   }
 }

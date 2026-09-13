@@ -377,8 +377,10 @@ export async function importGitHubRepository(data: {
 
 export interface ProviderConfigSummary {
   id: string;
+  credentialId?: string;
   name: string;
-  description: string;
+  provider: string;
+  description?: string;
   defaultModel: string;
   availableModels: string[];
   hasApiKey: boolean;
@@ -388,7 +390,7 @@ export interface ProviderConfigSummary {
   baseUrl?: string;
 }
 
-export async function fetchProviders(): Promise<{ providers: ProviderConfigSummary[] }> {
+export async function fetchProviders(): Promise<{ providers: ProviderConfigSummary[]; configuredProviders?: ProviderConfigSummary[] }> {
   const res = await fetch(`${API_BASE_URL}/api/v1/providers`, {
     cache: 'no-store',
   });
@@ -398,8 +400,8 @@ export async function fetchProviders(): Promise<{ providers: ProviderConfigSumma
   return res.json();
 }
 
-export async function toggleProviderActive(provider: string, isActive: boolean): Promise<{ success: boolean; isActive: boolean }> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/providers/${provider}/status`, {
+export async function toggleProviderActive(id: string, isActive: boolean): Promise<{ success: boolean; isActive: boolean }> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/providers/${encodeURIComponent(id)}/status`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ isActive }),
@@ -412,12 +414,14 @@ export async function toggleProviderActive(provider: string, isActive: boolean):
 }
 
 export async function saveProviderCredential(data: {
+  id?: string;
+  name?: string;
   provider: string;
   apiKey: string;
   defaultModel?: string;
   availableModels?: string[];
   baseUrl?: string;
-}): Promise<{ success: boolean; message: string }> {
+}): Promise<{ success: boolean; message: string; id?: string }> {
   const res = await fetch(`${API_BASE_URL}/api/v1/providers`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -430,8 +434,8 @@ export async function saveProviderCredential(data: {
   return res.json();
 }
 
-export async function deleteProviderCredential(provider: string): Promise<{ success: boolean; message: string }> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/providers/${provider}`, {
+export async function deleteProviderCredential(id: string): Promise<{ success: boolean; message: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/providers/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
   if (!res.ok) {
@@ -442,6 +446,7 @@ export async function deleteProviderCredential(provider: string): Promise<{ succ
 }
 
 export async function testProviderConnection(data: {
+  id?: string;
   provider: string;
   apiKey?: string;
   defaultModel?: string;

@@ -11,7 +11,7 @@ export const EngineeringTaskJobSchema = z.object({
   description: z.string().default(''),
   branch: z.string().min(1, 'branch is required'),
   baseBranch: z.string().default('main'),
-  provider: z.nativeEnum(LLMProviderType).optional(),
+  provider: z.string().optional(),
   model: z.string().optional(),
   maxSteps: z.number().int().positive().default(30),
   metadata: z.record(z.unknown()).default({}),

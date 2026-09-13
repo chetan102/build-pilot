@@ -11,50 +11,17 @@ const DEFAULT_MODELS_MAP: Record<string, string> = {
   [LLMProviderType.GEMINI]: 'gemini-1.5-pro',
   [LLMProviderType.ANTHROPIC]: 'claude-3-5-sonnet-20241022',
   [LLMProviderType.OPENROUTER]: 'anthropic/claude-3.5-sonnet',
-  [LLMProviderType.CUSTOM_OPENAI_COMPATIBLE]: 'default-model',
+  [LLMProviderType.CUSTOM_OPENAI_COMPATIBLE]: 'claude-3-5-sonnet',
 };
 
-// GET /api/v1/providers - list configured providers
+// GET /api/v1/providers - list configured and available providers
 providersRouter.get('/', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const credentials = await providerCredentialRepository.findByUserId('default-user');
-    
-    // Map with default list of supported providers
-    const supportedProviders = [
-      {
-        id: LLMProviderType.OPENAI,
-        name: 'OpenAI',
-        description: 'Direct GPT-4o, GPT-4o-mini, and o1 models',
-        defaultModel: 'gpt-4o',
-        availableModels: ['gpt-4o', 'gpt-4o-mini', 'o1-mini', 'o1-preview'],
-      },
-      {
-        id: LLMProviderType.GEMINI,
-        name: 'Google Gemini',
-        description: 'Direct Gemini 1.5 Pro & Gemini 1.5 Flash models',
-        defaultModel: 'gemini-1.5-pro',
-        availableModels: ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.0-flash-exp'],
-      },
-      {
-        id: LLMProviderType.ANTHROPIC,
-        name: 'Anthropic Claude',
-        description: 'Direct Claude 3.5 Sonnet & Claude 3.5 Haiku',
-        defaultModel: 'claude-3-5-sonnet-20241022',
-        availableModels: ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'],
-      },
-      {
-        id: LLMProviderType.OPENROUTER,
-        name: 'OpenRouter',
-        description: 'Access 100+ AI models including Claude 3.5 Sonnet, DeepSeek R1, and Llama 3',
-        defaultModel: 'anthropic/claude-3.5-sonnet',
-        availableModels: ['anthropic/claude-3.5-sonnet', 'openai/gpt-4o', 'deepseek/deepseek-r1', 'meta-llama/llama-3.3-70b-instruct'],
-      },
-    ];
 
-    const result = supportedProviders.map((sp) => {
-      const cred = credentials.find((c) => c.provider === sp.id);
+    const configured = credentials.map((cred: any) => {
       let maskedKey = '';
-      if (cred?.apiKeyEncrypted) {
+      if (cred.apiKeyEncrypted) {
         try {
           const decrypted = secretsManager.decrypt(cred.apiKeyEncrypted);
           if (decrypted.length > 8) {
@@ -68,37 +35,47 @@ providersRouter.get('/', async (_req: Request, res: Response, next: NextFunction
       }
 
       return {
-        ...sp,
-        hasApiKey: Boolean(cred?.apiKeyEncrypted),
+        id: cred._id?.toString() || cred.provider,
+        credentialId: cred._id?.toString(),
+        name: cred.name || `${cred.provider} Setup`,
+        provider: cred.provider,
+        description: cred.baseUrl ? `Endpoint: ${cred.baseUrl}` : `Native ${cred.provider} connection`,
+        defaultModel: cred.defaultModel || DEFAULT_MODELS_MAP[cred.provider as LLMProviderKind] || 'default-model',
+        availableModels: cred.availableModels || [cred.defaultModel],
+        hasApiKey: Boolean(cred.apiKeyEncrypted),
         maskedApiKey: maskedKey || undefined,
-        status: cred?.isActive ? 'connected' : 'not_configured',
-        isActive: cred ? Boolean(cred.isActive) : false,
-        defaultModel: cred?.defaultModel || sp.defaultModel,
-        availableModels: (cred?.availableModels && cred.availableModels.length > 0) ? cred.availableModels : sp.availableModels,
-        baseUrl: cred?.baseUrl,
+        status: cred.isActive ? 'connected' : 'not_configured',
+        isActive: Boolean(cred.isActive),
+        baseUrl: cred.baseUrl,
       };
     });
 
-    res.json({ providers: result });
+    res.json({
+      providers: configured,
+      configuredProviders: configured,
+    });
   } catch (err) {
     next(err);
   }
 });
 
-// PATCH /api/v1/providers/:provider/status - Toggle active/inactive
-providersRouter.patch('/:provider/status', async (req: Request, res: Response, next: NextFunction) => {
+// PATCH /api/v1/providers/:id/status - Toggle active/inactive
+providersRouter.patch('/:id/status', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { provider } = req.params;
+    const id = String(req.params.id || '');
+    if (!id) {
+      return res.status(400).json({ error: 'Provider ID is required' });
+    }
     const { isActive } = req.body;
     const updated = await providerCredentialRepository.updateActiveStatus(
-      provider as LLMProviderKind,
+      id,
       Boolean(isActive),
       'default-user',
     );
     if (!updated) {
-      return res.status(404).json({ error: `Provider ${provider} not found or not configured` });
+      return res.status(404).json({ error: `Provider credential ${id} not found` });
     }
-    res.json({ success: true, provider: updated.provider, isActive: updated.isActive });
+    res.json({ success: true, id: (updated as any)._id?.toString(), isActive: updated.isActive });
   } catch (err) {
     next(err);
   }
@@ -107,19 +84,37 @@ providersRouter.patch('/:provider/status', async (req: Request, res: Response, n
 // POST /api/v1/providers - Save / update provider credential
 providersRouter.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { provider, apiKey, defaultModel, availableModels, baseUrl } = req.body;
-    if (!provider || !apiKey || typeof apiKey !== 'string' || apiKey.trim().length < 5) {
-      return res.status(400).json({ error: 'Valid provider and apiKey are required' });
+    const { id, name, provider, apiKey, defaultModel, availableModels, baseUrl } = req.body;
+    if (!provider) {
+      return res.status(400).json({ error: 'Valid provider type is required' });
     }
 
-    const encryptedKey = secretsManager.encrypt(apiKey.trim());
-    const modelToUse = defaultModel || DEFAULT_MODELS_MAP[provider as LLMProviderKind] || 'default';
+    let encryptedKey: string | undefined;
+    if (apiKey && typeof apiKey === 'string' && apiKey.trim().length >= 4 && !apiKey.includes('••••')) {
+      encryptedKey = secretsManager.encrypt(apiKey.trim());
+    } else if (id) {
+      // Retain existing key if editing without changing key
+      const existing = await providerCredentialRepository.findById(id);
+      if (existing) {
+        encryptedKey = existing.apiKeyEncrypted;
+      }
+    }
+
+    if (!encryptedKey) {
+      return res.status(400).json({ error: 'A valid API key is required' });
+    }
+
+    const modelToUse = defaultModel || DEFAULT_MODELS_MAP[provider as LLMProviderKind] || 'gpt-4o';
     const modelsList = Array.isArray(availableModels) && availableModels.length > 0
       ? availableModels.map((m: string) => m.trim()).filter(Boolean)
       : [modelToUse];
 
+    const title = name && name.trim().length > 0 ? name.trim() : `${provider} Setup`;
+
     const saved = await providerCredentialRepository.upsertCredential({
+      id,
       userId: 'default-user',
+      name: title,
       provider: provider as LLMProviderKind,
       apiKeyEncrypted: encryptedKey,
       baseUrl: baseUrl ? baseUrl.trim() : undefined,
@@ -130,22 +125,28 @@ providersRouter.post('/', async (req: Request, res: Response, next: NextFunction
 
     res.json({
       success: true,
-      message: `API Key for ${provider} saved securely.`,
+      message: `Credentials for "${title}" saved successfully.`,
+      id: (saved as any)._id?.toString(),
+      name: saved.name,
       provider: saved.provider,
       defaultModel: saved.defaultModel,
       availableModels: saved.availableModels,
+      baseUrl: saved.baseUrl,
     });
   } catch (err) {
     next(err);
   }
 });
 
-// DELETE /api/v1/providers/:provider - Delete provider credential
-providersRouter.delete('/:provider', async (req: Request, res: Response, next: NextFunction) => {
+// DELETE /api/v1/providers/:id - Delete provider credential
+providersRouter.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { provider } = req.params;
-    await providerCredentialRepository.deleteCredential(provider as LLMProviderKind, 'default-user');
-    res.json({ success: true, message: `Removed credentials for ${provider}` });
+    const id = String(req.params.id || '');
+    if (!id) {
+      return res.status(400).json({ error: 'Provider ID is required' });
+    }
+    const deleted = await providerCredentialRepository.deleteCredential(id, 'default-user');
+    res.json({ success: deleted, message: `Removed provider credential` });
   } catch (err) {
     next(err);
   }
@@ -154,22 +155,24 @@ providersRouter.delete('/:provider', async (req: Request, res: Response, next: N
 // POST /api/v1/providers/test - Test connection
 providersRouter.post('/test', async (req: Request, res: Response) => {
   try {
-    const { provider, apiKey, baseUrl, defaultModel } = req.body;
+    const { id, provider, apiKey, baseUrl, defaultModel } = req.body;
     let keyToTest = apiKey;
 
-    if (!keyToTest) {
-      // Find from DB
-      const cred = await providerCredentialRepository.findActiveProvider('default-user', provider as LLMProviderKind);
+    if (!keyToTest || keyToTest.includes('••••')) {
+      // Find from DB by id or provider
+      const cred = id
+        ? await providerCredentialRepository.findById(id)
+        : await providerCredentialRepository.findActiveProvider('default-user', provider as LLMProviderKind);
       if (cred?.apiKeyEncrypted) {
         keyToTest = secretsManager.decrypt(cred.apiKeyEncrypted);
       }
     }
 
-    if (!keyToTest || keyToTest.trim().length < 5) {
+    if (!keyToTest || keyToTest.trim().length < 3) {
       return res.status(400).json({ success: false, error: 'No API key provided or found in saved settings' });
     }
 
-    const modelToUse = defaultModel || DEFAULT_MODELS_MAP[provider as LLMProviderKind] || 'default';
+    const modelToUse = defaultModel || DEFAULT_MODELS_MAP[provider as LLMProviderKind] || 'gpt-4o';
     const providerInstance = providerFactory.create({
       providerType: provider as LLMProviderKind,
       apiKey: keyToTest.trim(),
@@ -177,27 +180,23 @@ providersRouter.post('/test', async (req: Request, res: Response) => {
       defaultModel: modelToUse,
     });
 
-    let isValid = true;
-    if (typeof providerInstance.validateConnection === 'function') {
-      isValid = await providerInstance.validateConnection();
-    } else {
-      await providerInstance.generate({
-        model: modelToUse,
-        messages: [{ role: 'user', content: 'Ping' }],
-        maxTokens: 5,
-      });
-    }
+    // Always perform a live test generation with the exact model name to verify key, endpoint, AND model availability
+    const testRes = await providerInstance.generate({
+      model: modelToUse,
+      messages: [{ role: 'user', content: 'Ping' }],
+      maxTokens: 5,
+    });
 
-    if (!isValid) {
+    if (!testRes) {
       return res.status(400).json({
         success: false,
-        error: 'Provider connection validation failed. Please check your API key.',
+        error: `Provider did not return a response for model "${modelToUse}".`,
       });
     }
 
     res.json({
       success: true,
-      message: `Successfully verified API Key for ${provider}!`,
+      message: `Successfully verified "${modelToUse}" on ${provider}!`,
     });
   } catch (err: any) {
     res.status(400).json({

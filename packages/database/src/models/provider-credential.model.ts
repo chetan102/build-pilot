@@ -2,7 +2,9 @@ import mongoose, { Schema, Model } from 'mongoose';
 import { LLMProviderType, LLMProviderKind } from '@buildpilot/domain';
 
 export interface IProviderCredential {
+  _id?: any;
   userId: string;
+  name?: string;
   provider: LLMProviderKind;
   apiKeyEncrypted: string;
   baseUrl?: string;
@@ -16,6 +18,7 @@ export interface IProviderCredential {
 export const ProviderCredentialSchema = new Schema<IProviderCredential>(
   {
     userId: { type: String, required: true, index: true },
+    name: { type: String, default: 'Default Setup' },
     provider: { type: String, enum: Object.values(LLMProviderType), required: true },
     apiKeyEncrypted: { type: String, required: true },
     baseUrl: { type: String },
@@ -26,7 +29,7 @@ export const ProviderCredentialSchema = new Schema<IProviderCredential>(
   { timestamps: true },
 );
 
-ProviderCredentialSchema.index({ userId: 1, provider: 1 }, { unique: true });
+ProviderCredentialSchema.index({ userId: 1, name: 1 });
 
 export const ProviderCredentialModel: Model<IProviderCredential> =
   mongoose.models.ProviderCredential ||

@@ -186,22 +186,26 @@ export class WorkerService {
       let resolvedProvider = provider || (job.data.metadata?.provider as any);
       let resolvedModel = model || (job.data.metadata?.model as string);
       let apiKey = (job.data.metadata?.apiKey as string) || '';
+      let baseUrl = (job.data.metadata?.baseUrl as string) || undefined;
 
       // Check MongoDB for saved active provider credential if not already injected
       if (!this.options.llmProvider && !this.jobExecutor) {
         try {
+          const credentialId = job.data.metadata?.credentialId as string | undefined;
           const savedCred =
-            (await providerCredentialRepository.findActiveProvider('default-user', resolvedProvider as any)) ||
+            (credentialId ? await providerCredentialRepository.findById(credentialId) : null) ||
+            (resolvedProvider ? await providerCredentialRepository.findActiveProvider('default-user', resolvedProvider as any) : null) ||
             (await providerCredentialRepository.findActiveProvider('default-user'));
 
           if (savedCred) {
             resolvedProvider = resolvedProvider || savedCred.provider;
+            baseUrl = baseUrl || savedCred.baseUrl;
             // Priority to job-specified model if present; otherwise use saved defaultModel
             resolvedModel = (model && model !== 'anthropic/claude-3.5-sonnet') ? model : (savedCred.defaultModel || model || 'gpt-4o');
             if (!isRealKey(apiKey) && savedCred.apiKeyEncrypted) {
               apiKey = secretsManager.decrypt(savedCred.apiKeyEncrypted);
               this.logger.info(
-                { provider: resolvedProvider, model: resolvedModel },
+                { provider: resolvedProvider, model: resolvedModel, name: savedCred.name, baseUrl },
                 'Loaded encrypted API key saved by user from UI Settings',
               );
             }
@@ -475,13 +479,14 @@ export class WorkerService {
           }
 
           this.logger.info(
-            { provider: resolvedProvider, model: resolvedModel },
+            { provider: resolvedProvider, model: resolvedModel, baseUrl },
             'Using live user-configured LLM provider for autonomous execution',
           );
           llmProvider = providerFactory.getOrCreate({
             providerType: resolvedProvider,
             apiKey,
             defaultModel: resolvedModel,
+            baseUrl,
           });
         }
 

@@ -150,14 +150,30 @@ export class ProjectService {
     // Enqueue task for background worker execution
     try {
       const runId = new mongoose.Types.ObjectId().toString();
-      const meta = (task.metadata as Record<string, any>) || {};
+      const meta = { ...((task.metadata as Record<string, any>) || {}) };
       let taskProvider = meta.provider;
       let taskModel = meta.model;
+
+      if (taskProvider && /^[0-9a-fA-F]{24}$/.test(String(taskProvider))) {
+        meta.credentialId = taskProvider;
+        try {
+          const cred = await providerCredentialRepository.findById(taskProvider);
+          if (cred) {
+            taskProvider = cred.provider;
+            meta.baseUrl = cred.baseUrl;
+            taskModel = taskModel || cred.defaultModel;
+          }
+        } catch {
+          // ignore lookup error
+        }
+      }
 
       if (!taskProvider || !taskModel) {
         try {
           const activeCred = await providerCredentialRepository.findActiveProvider('default-user');
           if (activeCred) {
+            meta.credentialId = (activeCred as any)._id?.toString();
+            meta.baseUrl = activeCred.baseUrl;
             taskProvider = taskProvider || activeCred.provider;
             taskModel = taskModel || activeCred.defaultModel;
           }

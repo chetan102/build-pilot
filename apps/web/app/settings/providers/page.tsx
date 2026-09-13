@@ -19,6 +19,7 @@ import {
   Globe,
   Layers,
   Power,
+  Tag,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +35,16 @@ import {
 } from '@/lib/api-client';
 
 const PRESET_SUGGESTIONS: Record<string, string[]> = {
+  CUSTOM_OPENAI_COMPATIBLE: [
+    'claude-3-5-sonnet',
+    'claude-3-5-sonnet-20241022',
+    'deepseek-r1',
+    'deepseek-v3',
+    'gpt-4o',
+    'gpt-4o-mini',
+    'llama-3.3-70b-versatile',
+    'qwen-2.5-coder-32b-instruct',
+  ],
   OPENROUTER: [
     'anthropic/claude-3.5-sonnet',
     'deepseek/deepseek-r1',
@@ -57,14 +68,14 @@ const PRESET_SUGGESTIONS: Record<string, string[]> = {
     'claude-3-5-haiku-20241022',
     'claude-3-opus-20240229',
   ],
-  CUSTOM_OPENAI_COMPATIBLE: [
-    'llama-3.3-70b-versatile',
-    'mixtral-8x7b-32768',
-    'codellama',
-  ],
 };
 
 const PROVIDER_METADATA: Record<string, { name: string; description: string; defaultBaseUrl?: string }> = {
+  CUSTOM_OPENAI_COMPATIBLE: {
+    name: 'Custom OpenAI-Compatible (Xkiro / Groq / Ollama / DeepSeek)',
+    description: 'Connect Xkiro API, Groq, local Ollama, vLLM, or any standard OpenAI-compatible gateway.',
+    defaultBaseUrl: 'https://api.xkiro.com/v1',
+  },
   OPENROUTER: {
     name: 'OpenRouter',
     description: 'Universal AI gateway for Claude 3.5 Sonnet, DeepSeek R1, Llama 3, and 100+ models.',
@@ -81,11 +92,6 @@ const PROVIDER_METADATA: Record<string, { name: string; description: string; def
     name: 'Anthropic Claude',
     description: 'Direct Claude 3.5 Sonnet and Haiku models via Anthropic API.',
   },
-  CUSTOM_OPENAI_COMPATIBLE: {
-    name: 'Custom OpenAI-Compatible / Ollama / Groq',
-    description: 'Connect any OpenAI-compatible API endpoint, local Ollama, Groq, or vLLM server.',
-    defaultBaseUrl: 'http://localhost:11434/v1',
-  },
 };
 
 export default function ProvidersPage() {
@@ -96,9 +102,11 @@ export default function ProvidersPage() {
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = React.useState(false);
-  const [selectedProvider, setSelectedProvider] = React.useState('OPENROUTER');
+  const [editingId, setEditingId] = React.useState<string | null>(null);
+  const [titleInput, setTitleInput] = React.useState('');
+  const [selectedProvider, setSelectedProvider] = React.useState('CUSTOM_OPENAI_COMPATIBLE');
   const [apiKeyInput, setApiKeyInput] = React.useState('');
-  const [baseUrlInput, setBaseUrlInput] = React.useState('');
+  const [baseUrlInput, setBaseUrlInput] = React.useState('https://api.xkiro.com/v1');
   const [customModelInput, setCustomModelInput] = React.useState('');
   const [modelList, setModelList] = React.useState<string[]>([]);
   const [defaultModel, setDefaultModel] = React.useState('');
@@ -116,7 +124,7 @@ export default function ProvidersPage() {
     try {
       setLoading(true);
       const res = await fetchProviders();
-      setProviders(res.providers || []);
+      setProviders(res.providers || res.configuredProviders || []);
     } catch (err: any) {
       console.warn('Could not fetch providers:', err.message);
     } finally {
@@ -128,28 +136,36 @@ export default function ProvidersPage() {
     loadProviders();
   }, [loadProviders]);
 
-  // Open modal for a new or existing provider
-  const handleOpenModal = (providerId: string = 'OPENROUTER') => {
-    const existing = providers.find((p) => p.id === providerId);
-    setSelectedProvider(providerId);
+  // Open modal for a new setup
+  const handleOpenNewModal = (defaultType: string = 'CUSTOM_OPENAI_COMPATIBLE') => {
+    setEditingId(null);
+    setSelectedProvider(defaultType);
+    setTitleInput(defaultType === 'CUSTOM_OPENAI_COMPATIBLE' ? 'Xkiro Claude 3.5' : `${PROVIDER_METADATA[defaultType]?.name || defaultType} Setup`);
     setApiKeyInput('');
-    setBaseUrlInput(existing?.baseUrl || PROVIDER_METADATA[providerId]?.defaultBaseUrl || '');
+    setBaseUrlInput(PROVIDER_METADATA[defaultType]?.defaultBaseUrl || '');
+    setModalStatus(null);
+    setCustomModelInput('');
+    setModelList([]);
+    setDefaultModel('');
+    setIsModalOpen(true);
+  };
+
+  // Open modal to edit existing setup
+  const handleOpenEditModal = (providerItem: ProviderConfigSummary) => {
+    setEditingId(providerItem.id);
+    setSelectedProvider(providerItem.provider || providerItem.id);
+    setTitleInput(providerItem.name || `${providerItem.provider} Setup`);
+    setApiKeyInput('');
+    setBaseUrlInput(providerItem.baseUrl || '');
     setModalStatus(null);
     setCustomModelInput('');
 
-    if (existing && existing.availableModels && existing.availableModels.length > 0) {
-      setModelList([...existing.availableModels]);
-      setDefaultModel(existing.defaultModel || existing.availableModels[0] || '');
+    if (providerItem.availableModels && providerItem.availableModels.length > 0) {
+      setModelList([...providerItem.availableModels]);
+      setDefaultModel(providerItem.defaultModel || providerItem.availableModels[0] || '');
     } else {
-      // For OpenRouter, start completely clean so user adds their own models
-      if (providerId === 'OPENROUTER') {
-        setModelList([]);
-        setDefaultModel('');
-      } else {
-        const presets = PRESET_SUGGESTIONS[providerId] || [];
-        setModelList([...presets]);
-        setDefaultModel(presets[0] || '');
-      }
+      setModelList(providerItem.defaultModel ? [providerItem.defaultModel] : []);
+      setDefaultModel(providerItem.defaultModel || '');
     }
 
     setIsModalOpen(true);
@@ -158,21 +174,12 @@ export default function ProvidersPage() {
   const handleProviderChange = (newProvider: string) => {
     setSelectedProvider(newProvider);
     setModalStatus(null);
-    setBaseUrlInput(PROVIDER_METADATA[newProvider]?.defaultBaseUrl || '');
-    const existing = providers.find((p) => p.id === newProvider);
-    if (existing && existing.availableModels && existing.availableModels.length > 0) {
-      setModelList([...existing.availableModels]);
-      setDefaultModel(existing.defaultModel || existing.availableModels[0] || '');
-    } else {
-      if (newProvider === 'OPENROUTER') {
-        setModelList([]);
-        setDefaultModel('');
-      } else {
-        const presets = PRESET_SUGGESTIONS[newProvider] || [];
-        setModelList([...presets]);
-        setDefaultModel(presets[0] || '');
-      }
+    if (!titleInput || titleInput.includes('Setup') || titleInput.includes('Xkiro')) {
+      setTitleInput(newProvider === 'CUSTOM_OPENAI_COMPATIBLE' ? 'Xkiro Claude 3.5' : `${PROVIDER_METADATA[newProvider]?.name || newProvider} Setup`);
     }
+    setBaseUrlInput(PROVIDER_METADATA[newProvider]?.defaultBaseUrl || '');
+    setModelList([]);
+    setDefaultModel('');
   };
 
   const handleAddModel = (modelName: string) => {
@@ -200,7 +207,7 @@ export default function ProvidersPage() {
 
   const handleTestConnectionInModal = async () => {
     const key = apiKeyInput.trim();
-    const existing = providers.find((p) => p.id === selectedProvider);
+    const existing = editingId ? providers.find((p) => p.id === editingId) : undefined;
 
     if (!key && !existing?.hasApiKey) {
       setModalStatus({
@@ -215,6 +222,7 @@ export default function ProvidersPage() {
 
     try {
       const res = await testProviderConnection({
+        id: editingId || undefined,
         provider: selectedProvider,
         apiKey: key || undefined,
         defaultModel: defaultModel || modelList[0] || 'default',
@@ -228,7 +236,7 @@ export default function ProvidersPage() {
     } catch (err: any) {
       setModalStatus({
         type: 'error',
-        message: err.message || 'Connection test failed. Please check API key.',
+        message: err.message || 'Connection test failed. Please check API key or Base URL.',
       });
     } finally {
       setIsTesting(false);
@@ -237,12 +245,12 @@ export default function ProvidersPage() {
 
   const handleSaveModal = async () => {
     const key = apiKeyInput.trim();
-    const existing = providers.find((p) => p.id === selectedProvider);
+    const existing = editingId ? providers.find((p) => p.id === editingId) : undefined;
 
     if (!key && !existing?.hasApiKey) {
       setModalStatus({
         type: 'error',
-        message: 'API Key is required to configure this provider.',
+        message: 'API Key is required to save this provider setup.',
       });
       return;
     }
@@ -250,7 +258,7 @@ export default function ProvidersPage() {
     if (modelList.length === 0) {
       setModalStatus({
         type: 'error',
-        message: 'Please add at least one model name for this provider.',
+        message: 'Please add at least one model name for this setup.',
       });
       return;
     }
@@ -259,9 +267,12 @@ export default function ProvidersPage() {
     setModalStatus(null);
 
     try {
+      const title = titleInput.trim() || `${selectedProvider} Setup`;
       await saveProviderCredential({
+        id: editingId || undefined,
+        name: title,
         provider: selectedProvider,
-        apiKey: key || 'UNCHANGED',
+        apiKey: key || (existing?.hasApiKey ? '••••••••' : ''),
         defaultModel: defaultModel || modelList[0] || 'default',
         availableModels: modelList,
         baseUrl: baseUrlInput.trim() || undefined,
@@ -269,7 +280,7 @@ export default function ProvidersPage() {
 
       setPageMessage({
         type: 'success',
-        text: `Successfully configured ${PROVIDER_METADATA[selectedProvider]?.name || selectedProvider}!`,
+        text: `Successfully saved "${title}"!`,
       });
       setIsModalOpen(false);
       await loadProviders();
@@ -287,9 +298,10 @@ export default function ProvidersPage() {
     try {
       const targetState = !currentActive;
       await toggleProviderActive(providerId, targetState);
+      const item = providers.find((p) => p.id === providerId);
       setPageMessage({
         type: 'success',
-        text: `${PROVIDER_METADATA[providerId]?.name || providerId} is now ${targetState ? 'ACTIVE' : 'INACTIVE'}.`,
+        text: `"${item?.name || providerId}" is now ${targetState ? 'ACTIVE' : 'INACTIVE'}.`,
       });
       await loadProviders();
     } catch (err: any) {
@@ -298,18 +310,16 @@ export default function ProvidersPage() {
   };
 
   const handleDeleteProvider = async (providerId: string) => {
-    if (!confirm(`Are you sure you want to remove credentials for ${providerId}?`)) return;
+    const item = providers.find((p) => p.id === providerId);
+    if (!confirm(`Are you sure you want to remove setup "${item?.name || providerId}"?`)) return;
     try {
       await deleteProviderCredential(providerId);
-      setPageMessage({ type: 'success', text: `Removed credentials for ${providerId}.` });
+      setPageMessage({ type: 'success', text: `Removed setup "${item?.name || providerId}".` });
       await loadProviders();
     } catch (err: any) {
       setPageMessage({ type: 'error', text: err.message || 'Failed to delete provider.' });
     }
   };
-
-  // Only show providers that have actually been configured by the user
-  const configuredProviders = providers.filter((p) => p.hasApiKey);
 
   // Modal JSX (portal to document.body so backdrop covers 100% of the viewport)
   const modalContent = isModalOpen && mounted ? createPortal(
@@ -323,12 +333,10 @@ export default function ProvidersPage() {
             </div>
             <div>
               <h3 className="text-base font-bold text-slate-900">
-                {providers.find((p) => p.id === selectedProvider)?.hasApiKey
-                  ? `Edit ${PROVIDER_METADATA[selectedProvider]?.name || selectedProvider}`
-                  : 'Add LLM Provider'}
+                {editingId ? 'Edit AI Provider Setup' : 'Add AI Provider Setup'}
               </h3>
               <p className="text-xs text-slate-500">
-                Configure API key and add custom models by text.
+                Configure Xkiro, OpenRouter, Groq, Ollama, OpenAI, or Claude.
               </p>
             </div>
           </div>
@@ -341,24 +349,59 @@ export default function ProvidersPage() {
           </button>
         </div>
 
+        {/* Setup Title / Label */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+            <Tag className="h-3.5 w-3.5 text-indigo-600" />
+            <span>Setup Title / Name *</span>
+          </label>
+          <Input
+            type="text"
+            placeholder="e.g. Xkiro Claude 3.5, Production Groq, Primary OpenRouter..."
+            value={titleInput}
+            onChange={(e) => setTitleInput(e.target.value)}
+            className="text-xs font-semibold rounded-xl"
+          />
+        </div>
+
         {/* Provider Selection */}
         <div className="space-y-1.5">
           <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
             <Server className="h-3.5 w-3.5 text-indigo-600" />
-            <span>AI Provider</span>
+            <span>Provider Type</span>
           </label>
           <select
             value={selectedProvider}
             onChange={(e) => handleProviderChange(e.target.value)}
             className="w-full h-9 rounded-xl border border-slate-200 bg-white px-3 py-1 text-xs text-slate-900 shadow-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold"
           >
+            <option value="CUSTOM_OPENAI_COMPATIBLE">Custom OpenAI-Compatible (Xkiro / Groq / Ollama / DeepSeek)</option>
             <option value="OPENROUTER">OpenRouter (Claude 3.5 Sonnet, DeepSeek R1, Llama 3, Qwen, etc.)</option>
             <option value="OPENAI">OpenAI (Direct GPT-4o, GPT-4o-mini, o1)</option>
             <option value="GEMINI">Google Gemini (Gemini 1.5 Pro & Flash)</option>
             <option value="ANTHROPIC">Anthropic Claude (Direct Sonnet & Haiku)</option>
-            <option value="CUSTOM_OPENAI_COMPATIBLE">Custom OpenAI-Compatible / Local Ollama / Groq</option>
           </select>
         </div>
+
+        {/* Base URL Input */}
+        {(selectedProvider === 'CUSTOM_OPENAI_COMPATIBLE' || baseUrlInput) && (
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+              <Globe className="h-3.5 w-3.5 text-indigo-600" />
+              <span>Base URL (API Endpoint)</span>
+            </label>
+            <Input
+              type="text"
+              placeholder="e.g. https://api.xkiro.com/v1 or https://api.groq.com/openai/v1"
+              value={baseUrlInput}
+              onChange={(e) => setBaseUrlInput(e.target.value)}
+              className="text-xs font-mono rounded-xl"
+            />
+            <span className="text-[10px] text-slate-400">
+              For Xkiro use <code>https://api.xkiro.com/v1</code>. For Groq use <code>https://api.groq.com/openai/v1</code>.
+            </span>
+          </div>
+        )}
 
         {/* API Key Input */}
         <div className="space-y-1.5">
@@ -367,18 +410,18 @@ export default function ProvidersPage() {
               <Key className="h-3.5 w-3.5 text-indigo-600" />
               <span>API Key *</span>
             </label>
-            {providers.find((p) => p.id === selectedProvider)?.maskedApiKey && (
+            {editingId && providers.find((p) => p.id === editingId)?.maskedApiKey && (
               <span className="text-[10px] font-mono text-slate-400">
-                Saved: {providers.find((p) => p.id === selectedProvider)?.maskedApiKey}
+                Saved: {providers.find((p) => p.id === editingId)?.maskedApiKey}
               </span>
             )}
           </div>
           <Input
             type="password"
             placeholder={
-              providers.find((p) => p.id === selectedProvider)?.hasApiKey
+              editingId && providers.find((p) => p.id === editingId)?.hasApiKey
                 ? '•••••••••••••••• (leave blank to keep current key)'
-                : 'Paste API Key (e.g. sk-or-v1-..., sk-..., AIzaSy...)'
+                : 'Paste API Key (e.g. sk-...)'
             }
             value={apiKeyInput}
             onChange={(e) => setApiKeyInput(e.target.value)}
@@ -386,29 +429,12 @@ export default function ProvidersPage() {
           />
         </div>
 
-        {/* Optional Base URL */}
-        {(selectedProvider === 'CUSTOM_OPENAI_COMPATIBLE' || baseUrlInput) && (
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-              <Globe className="h-3.5 w-3.5 text-indigo-600" />
-              <span>Base URL (Optional)</span>
-            </label>
-            <Input
-              type="text"
-              placeholder="e.g. http://localhost:11434/v1 or https://api.groq.com/openai/v1"
-              value={baseUrlInput}
-              onChange={(e) => setBaseUrlInput(e.target.value)}
-              className="text-xs font-mono rounded-xl"
-            />
-          </div>
-        )}
-
         {/* Models Configuration */}
         <div className="space-y-2.5 pt-2 border-t border-slate-100">
           <div className="flex items-center justify-between">
             <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
               <Zap className="h-3.5 w-3.5 text-amber-500" />
-              <span>Custom Models (Add models by typing text)</span>
+              <span>Available Models</span>
             </label>
             <span className="text-[10px] text-slate-400">Click a tag to set Default</span>
           </div>
@@ -417,7 +443,7 @@ export default function ProvidersPage() {
           <div className="flex items-center gap-2">
             <Input
               type="text"
-              placeholder="Type model name (e.g. deepseek/deepseek-r1, anthropic/claude-3.5-sonnet)..."
+              placeholder="Type model name (e.g. claude-3-5-sonnet, deepseek-r1)..."
               value={customModelInput}
               onChange={(e) => setCustomModelInput(e.target.value)}
               onKeyDown={(e) => {
@@ -467,8 +493,8 @@ export default function ProvidersPage() {
             </span>
             
             {modelList.length === 0 ? (
-              <p className="text-xs text-slate-400 italic py-2">
-                No models added yet. Type a model name above (e.g. <code>anthropic/claude-3.5-sonnet</code>) and click Add.
+              <p className="text-xs text-slate-500 italic py-2">
+                No models added yet. Click a suggestion below (e.g. <code>claude-3-5-sonnet</code>) or type a custom model name above and click <strong>Add</strong>.
               </p>
             ) : (
               <div className="flex flex-wrap gap-1.5 pt-1">
@@ -575,19 +601,19 @@ export default function ProvidersPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <Sparkles className="h-6 w-6 text-indigo-600" />
-            LLM Providers & Credentials
+            AI Model Providers & Setups
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Configure model providers with Bring-Your-Own-Key (BYOK). Credentials are encrypted with AES-256 and used for autonomous task execution.
+            Configure custom AI setups (Xkiro, OpenRouter, Groq, Ollama, OpenAI, Anthropic). Multiple named setups are supported with AES-256 encryption.
           </p>
         </div>
 
         <Button
-          onClick={() => handleOpenModal('OPENROUTER')}
+          onClick={() => handleOpenNewModal('CUSTOM_OPENAI_COMPATIBLE')}
           className="gap-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs h-9 px-4 rounded-xl shadow-xs"
         >
           <Plus className="h-4 w-4 text-amber-300" />
-          <span>Add LLM Provider</span>
+          <span>Add Provider Setup</span>
         </Button>
       </div>
 
@@ -620,26 +646,33 @@ export default function ProvidersPage() {
           <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 text-indigo-600" />
           <span>Loading provider credentials...</span>
         </div>
-      ) : configuredProviders.length === 0 ? (
+      ) : providers.length === 0 ? (
         /* Clean Empty State when no provider configured yet */
         <div className="text-center py-16 px-6 bg-white rounded-2xl border border-dashed border-slate-300 shadow-xs max-w-2xl mx-auto space-y-4">
           <div className="h-16 w-16 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center mx-auto shadow-xs">
             <Sparkles className="h-8 w-8" />
           </div>
           <div className="space-y-1.5">
-            <h3 className="text-lg font-bold text-slate-900">No LLM Providers Configured Yet</h3>
+            <h3 className="text-lg font-bold text-slate-900">No AI Providers Configured Yet</h3>
             <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-              BuildPilot requires an active AI provider key to run autonomous tasks, write code, and verify tests. Click below to configure your OpenRouter, OpenAI, Google Gemini, or Anthropic key.
+              Add your Xkiro, OpenRouter, Groq, OpenAI, Gemini, or Claude credentials to enable autonomous agent task execution.
             </p>
           </div>
 
-          <div className="pt-2">
+          <div className="pt-2 flex flex-wrap justify-center gap-2">
             <Button
-              onClick={() => handleOpenModal('OPENROUTER')}
-              className="gap-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs h-10 px-5 rounded-xl shadow-sm"
+              onClick={() => handleOpenNewModal('CUSTOM_OPENAI_COMPATIBLE')}
+              className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs h-10 px-5 rounded-xl shadow-sm"
             >
-              <Plus className="h-4 w-4 text-amber-300" />
-              <span>Add Your First LLM Provider</span>
+              <Plus className="h-4 w-4" />
+              <span>Connect Xkiro / OpenAI-Compatible</span>
+            </Button>
+            <Button
+              onClick={() => handleOpenNewModal('OPENROUTER')}
+              variant="outline"
+              className="gap-2 bg-white text-slate-700 font-semibold text-xs h-10 px-5 rounded-xl border-slate-200"
+            >
+              <span>Connect OpenRouter</span>
             </Button>
           </div>
 
@@ -650,31 +683,41 @@ export default function ProvidersPage() {
             </span>
             <span className="flex items-center gap-1.5">
               <Zap className="h-3.5 w-3.5 text-amber-500" />
-              Custom Text Models
+              Custom Named Setups
             </span>
             <span className="flex items-center gap-1.5">
               <Layers className="h-3.5 w-3.5 text-slate-500" />
-              Active / Inactive Gating
+              Multi-Model Presets
             </span>
           </div>
         </div>
       ) : (
-        /* Configured Providers Cards List (ONLY configured ones) */
+        /* Configured Providers Cards List */
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-              Active Configured Providers ({configuredProviders.length})
+              Configured AI Setups ({providers.length})
             </h2>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleOpenNewModal('CUSTOM_OPENAI_COMPATIBLE')}
+              className="text-xs h-8 gap-1.5 rounded-xl bg-white border-slate-200"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Add Another Setup</span>
+            </Button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {configuredProviders.map((provider) => {
-              const meta = PROVIDER_METADATA[provider.id] || { name: provider.name, description: provider.description };
-              const isActive = provider.isActive !== false;
+            {providers.map((item) => {
+              const isActive = item.isActive !== false;
+              const providerType = item.provider || item.id;
+              const meta = PROVIDER_METADATA[providerType] || { name: item.name, description: item.description };
 
               return (
                 <Card
-                  key={provider.id}
+                  key={item.id}
                   className={`border rounded-2xl shadow-xs transition bg-white ${
                     isActive ? 'border-indigo-200 ring-1 ring-indigo-50' : 'border-slate-200 opacity-75 bg-slate-50/50'
                   }`}
@@ -692,13 +735,16 @@ export default function ProvidersPage() {
                             <Sparkles className="h-4 w-4" />
                           </div>
                           <div>
-                            <h3 className="font-bold text-sm text-slate-900">{meta.name}</h3>
+                            <h3 className="font-bold text-sm text-slate-900">{item.name}</h3>
                             <div className="flex items-center gap-2 mt-0.5">
+                              <Badge variant="outline" className="text-[10px] font-mono bg-slate-50">
+                                {providerType}
+                              </Badge>
                               <Badge
                                 variant={isActive ? 'success' : 'secondary'}
                                 className="text-[10px] font-bold"
                               >
-                                {isActive ? '✓ Active & Available' : 'Inactive (Disabled)'}
+                                {isActive ? '✓ Active' : 'Inactive'}
                               </Badge>
                             </div>
                           </div>
@@ -709,13 +755,13 @@ export default function ProvidersPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleToggleActive(provider.id, isActive)}
+                            onClick={() => handleToggleActive(item.id, isActive)}
                             className={`h-7 px-2.5 text-xs font-semibold gap-1.5 rounded-lg border ${
                               isActive
                                 ? 'text-emerald-700 bg-emerald-50/60 border-emerald-200 hover:bg-emerald-100'
                                 : 'text-slate-600 bg-slate-100 border-slate-200 hover:bg-slate-200'
                             }`}
-                            title={isActive ? 'Click to deactivate provider' : 'Click to activate provider'}
+                            title={isActive ? 'Click to deactivate' : 'Click to activate'}
                           >
                             <Power className={`h-3 w-3 ${isActive ? 'text-emerald-600' : 'text-slate-400'}`} />
                             <span>{isActive ? 'Active' : 'Inactive'}</span>
@@ -724,9 +770,9 @@ export default function ProvidersPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleOpenModal(provider.id)}
+                            onClick={() => handleOpenEditModal(item)}
                             className="h-7 px-2 text-xs text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50"
-                            title="Edit provider & models"
+                            title="Edit setup"
                           >
                             <Edit3 className="h-3.5 w-3.5 mr-1" />
                             <span>Edit</span>
@@ -734,46 +780,52 @@ export default function ProvidersPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDeleteProvider(provider.id)}
+                            onClick={() => handleDeleteProvider(item.id)}
                             className="h-7 px-2 text-xs text-red-600 hover:text-red-800 hover:bg-red-50"
-                            title="Delete credentials"
+                            title="Delete setup"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                       </div>
 
-                      <p className="text-xs text-slate-500 leading-relaxed">{meta.description}</p>
-
                       {/* Config Details */}
                       <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-2 text-xs">
+                        {item.baseUrl && (
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="text-slate-400 font-medium">Base URL:</span>
+                            <span className="font-mono text-slate-700 truncate max-w-[240px]">{item.baseUrl}</span>
+                          </div>
+                        )}
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="text-slate-400 font-medium">API Key:</span>
-                          <span className="font-mono text-slate-700 font-semibold">{provider.maskedApiKey}</span>
+                          <span className="font-mono text-slate-700 font-semibold">{item.maskedApiKey || '••••••••'}</span>
                         </div>
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="text-slate-400 font-medium">Default Model:</span>
                           <span className="font-bold text-indigo-700 font-mono bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
-                            {provider.defaultModel}
+                            {item.defaultModel}
                           </span>
                         </div>
                         
                         {/* Models Chips */}
-                        <div className="pt-1.5 border-t border-slate-200/60">
-                          <span className="text-[10px] text-slate-400 block mb-1 font-medium">
-                            Configured Models ({provider.availableModels.length}):
-                          </span>
-                          <div className="flex flex-wrap gap-1">
-                            {provider.availableModels.map((m) => (
-                              <span
-                                key={m}
-                                className="text-[10px] font-mono px-2 py-0.5 rounded bg-white text-slate-700 border border-slate-200"
-                              >
-                                {m}
-                              </span>
-                            ))}
+                        {item.availableModels && item.availableModels.length > 0 && (
+                          <div className="pt-1.5 border-t border-slate-200/60">
+                            <span className="text-[10px] text-slate-400 block mb-1 font-medium">
+                              Configured Models ({item.availableModels.length}):
+                            </span>
+                            <div className="flex flex-wrap gap-1">
+                              {item.availableModels.map((m) => (
+                                <span
+                                  key={m}
+                                  className="text-[10px] font-mono px-2 py-0.5 rounded bg-white text-slate-700 border border-slate-200"
+                                >
+                                  {m}
+                                </span>
+                              ))}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     </div>
 
@@ -782,11 +834,11 @@ export default function ProvidersPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleOpenModal(provider.id)}
+                        onClick={() => handleOpenEditModal(item)}
                         className="w-full text-xs font-semibold gap-1.5 h-8 bg-white border-slate-200 hover:border-indigo-300"
                       >
                         <Edit3 className="h-3.5 w-3.5 text-slate-500" />
-                        <span>Manage Keys & Custom Models</span>
+                        <span>Manage Keys & Models</span>
                       </Button>
                     </div>
                   </CardContent>
