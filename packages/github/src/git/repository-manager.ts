@@ -59,12 +59,17 @@ export class GitRepositoryManager {
         throw new Error(`Git clone failed for '${repoUrl}': ${err instanceof Error ? err.message : String(err)}`);
       }
     } else {
-      logger.info({ repoUrl, targetDir }, 'Fetching latest refs for existing repository mirror');
+      logger.info({ repoUrl: repoUrl.replace(/:[^@]+@/, ':***@'), targetDir }, 'Fetching latest refs for existing repository mirror');
       try {
-        await execFileAsync('git', ['fetch', '--all', '--prune'], {
+        await execFileAsync('git', ['remote', 'set-url', 'origin', repoUrl], { cwd: targetDir }).catch(() => {});
+        await execFileAsync('git', ['fetch', 'origin', '--prune'], {
           cwd: targetDir,
           timeout: timeoutMs,
         });
+        try {
+          await execFileAsync('git', ['checkout', defaultBranch], { cwd: targetDir });
+          await execFileAsync('git', ['reset', '--hard', `origin/${defaultBranch}`], { cwd: targetDir });
+        } catch {}
         return {
           repoDir: targetDir,
           defaultBranch,

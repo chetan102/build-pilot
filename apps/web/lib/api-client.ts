@@ -220,6 +220,27 @@ export async function mergeTaskPullRequest(taskId: string): Promise<{
   return res.json();
 }
 
+export async function createTaskPullRequest(taskId: string): Promise<{
+  success: boolean;
+  prUrl: string;
+  prNumber: number;
+  title: string;
+}> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('bp_github_token') : null;
+  const res = await fetch(`${API_BASE_URL}/api/v1/tasks/${taskId}/create-pr`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}`, 'x-github-token': token } : {}),
+    },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || err.message || `Failed to create pull request: ${res.statusText}`);
+  }
+  return res.json();
+}
+
 export interface GitHubRepoSummary {
   id: number;
   name: string;

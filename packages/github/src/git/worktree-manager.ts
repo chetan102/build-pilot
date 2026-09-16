@@ -59,12 +59,21 @@ export class GitWorktreeManager {
     );
 
     try {
-      // Create worktree with a new dedicated branch from baseBranch (-B resets if exists)
-      await execFileAsync(
-        'git',
-        ['worktree', 'add', '-B', branch, worktreePath, baseBranch],
-        { cwd: repoDir },
-      );
+      // Create worktree with a new dedicated branch from origin/baseBranch (-B resets if exists)
+      const startPoint = baseBranch.startsWith('origin/') ? baseBranch : `origin/${baseBranch}`;
+      try {
+        await execFileAsync(
+          'git',
+          ['worktree', 'add', '-B', branch, worktreePath, startPoint],
+          { cwd: repoDir },
+        );
+      } catch {
+        await execFileAsync(
+          'git',
+          ['worktree', 'add', '-B', branch, worktreePath, baseBranch],
+          { cwd: repoDir },
+        );
+      }
 
       return {
         worktreePath,

@@ -10,6 +10,7 @@ import {
 } from '@buildpilot/database';
 import mongoose from 'mongoose';
 import { EntityNotFoundError, DomainError, TaskStatus } from '@buildpilot/domain';
+import { secretsManager } from '@buildpilot/shared';
 import { createLogger, Logger } from '@buildpilot/observability';
 import { CreateProjectInput } from '../schemas/project.schema.js';
 import { CreateTaskInput } from '../schemas/task.schema.js';
@@ -179,6 +180,14 @@ export class ProjectService {
           }
         } catch {
           // ignore lookup error
+        }
+      }
+
+      if (!meta.githubToken && project.encryptedAccessToken) {
+        try {
+          meta.githubToken = secretsManager.decrypt(project.encryptedAccessToken);
+        } catch {
+          // ignore decryption error
         }
       }
 

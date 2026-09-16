@@ -170,6 +170,29 @@ export class TaskController {
       next(err);
     }
   }
+
+  async createPullRequest(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const taskId = String(req.params.taskId || '');
+      let authHeaderToken: string | undefined;
+      const authHeader = req.headers['authorization'];
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        authHeaderToken = authHeader.substring(7).trim();
+      }
+      const customToken = req.headers['x-github-token'] as string | undefined;
+      const token = customToken || authHeaderToken;
+
+      const result = await taskService.createPullRequestForTask(taskId, token);
+
+      res.status(200).json({
+        success: true,
+        ...result,
+        correlationId: req.correlationId,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 export const taskController = new TaskController();

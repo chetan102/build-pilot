@@ -88,7 +88,7 @@ export class AgentCoreLoop {
   ): Promise<AgentLoopResult> {
     const startTime = Date.now();
     const model = runtimeOptions?.model || this.options.model || (provider as any).config?.defaultModel || 'gpt-4o';
-    const maxSteps = runtimeOptions?.maxSteps || this.options.maxSteps || 30;
+    const maxSteps = runtimeOptions?.maxSteps || this.options.maxSteps || 20;
     const maxWallClockMs = this.options.maxWallClockMs || 10 * 60 * 1000;
     const perToolTimeoutMs = this.options.perToolTimeoutMs || 30000;
     const workspaceDir = runtimeOptions?.workspaceDir || this.options.workspaceDir || repo?.workspacePath || process.cwd();
@@ -114,6 +114,9 @@ export class AgentCoreLoop {
     const STALL_THRESHOLD = 6; // kill the loop if agent reads/explores for 6 steps without writing
     // Circuit breaker: Count consecutive failed test runs to prevent test-retry panic loops
     let consecutiveTestFailures = 0;
+    // Circuit breaker: Count file writes per path to prevent file-rewrite loops
+    const fileWriteCounts: Map<string, number> = new Map();
+    let consecutiveFileWrites = 0;
     const sandboxCapabilities = runtimeOptions?.sandboxCapabilities || this.options.sandboxCapabilities;
 
     this.logger.info(
@@ -390,6 +393,30 @@ export class AgentCoreLoop {
           }
         }
 
+        if (toolCall.name === 'write_file') {
+          const rawArgs = typeof toolCall.arguments === 'object' ? (toolCall.arguments as any) : {};
+          const targetPath = rawArgs?.path || '';
+          const currentWrites = (fileWriteCounts.get(targetPath) || 0) + 1;
+          fileWriteCounts.set(targetPath, currentWrites);
+          consecutiveFileWrites++;
+
+          if (currentWrites === 2) {
+            pendingWarnings.push(
+              `[SYSTEM WARNING]: You have rewritten '${targetPath}' twice without testing or creating a PR. Do NOT keep rewriting the same file in a loop. Proceed immediately to run_tests or call create_pull_request.`
+            );
+          } else if (currentWrites >= 3) {
+            isIntercepted = true;
+            toolResult = {
+              path: targetPath,
+              cached: true,
+              message: `[CIRCUIT BREAKER]: Overwriting '${targetPath}' is blocked because you have already written this file 3 times. Please call create_pull_request immediately to submit your changes and complete the task.`,
+            };
+            pendingWarnings.push(
+              `[MANDATE]: File rewrite loop blocked on '${targetPath}'. You MUST call create_pull_request immediately to conclude the task.`
+            );
+          }
+        }
+
         if (toolCall.name === 'run_tests' && consecutiveTestFailures >= 3) {
           isIntercepted = true;
           toolResult = {
@@ -418,7 +445,17 @@ export class AgentCoreLoop {
           }
 
           const toolDurationMs = Date.now() - toolStartTime;
-          loopDetector.recordCall(toolCall.name, toolCall.arguments, true);
+          const loopCheck = loopDetector.recordCall(toolCall.name, toolCall.arguments, true);
+          if (loopCheck.isLoop) {
+            this.logger.warn({ tool: toolCall.name, reason: loopCheck.reason }, 'Action sequence loop detected');
+            pendingWarnings.push(
+              `[CIRCUIT BREAKER]: ${loopCheck.reason || 'Repeated cyclical action loop detected'}. You MUST stop modifying files and call create_pull_request immediately to conclude the task.`
+            );
+          } else if (loopCheck.shouldWarn) {
+            pendingWarnings.push(
+              `[SYSTEM WARNING]: ${loopCheck.reason || 'Repeated pattern detected'}. Do not repeat this action sequence. Proceed to run_tests or create_pull_request.`
+            );
+          }
 
           // ── Fatal tool result check ──────────────────────────────────────
           // If the result contains a fatal pattern (exit 127, auth error, etc.)
@@ -471,6 +508,8 @@ export class AgentCoreLoop {
 
           // Track test outcomes to break loops
           if (toolCall.name === 'run_tests') {
+            consecutiveFileWrites = 0;
+            fileWriteCounts.clear();
             const isPassed = (toolResult as any)?.passed === true;
             if (!isPassed && !isIntercepted) {
               consecutiveTestFailures++;
@@ -482,6 +521,10 @@ export class AgentCoreLoop {
             } else if (isPassed) {
               consecutiveTestFailures = 0;
             }
+          }
+          if (toolCall.name === 'run_command') {
+            consecutiveFileWrites = 0;
+            fileWriteCounts.clear();
           }
 
           const stringifiedResult = typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult);

@@ -21,7 +21,8 @@ Follow this EXACT step sequence for high-impact, token-efficient delivery:
 8. **Token Frugality**: Keep reasoning concise (1-2 sentences per step). Let tool actions carry the work.
 9. **One failure = move on**: If any non-transient command fails, do not loop retrying the same command.
 10. **Test Runner Compatibility**: If the repository uses Node's native test runner (\`node --test\`), Node does not parse JSX (\`<Component />\`) without a transpiler. For UI components in \`node --test\` projects, test exports/functions/markup with standard JavaScript string/object assertions or proceed to create the PR. Never loop retrying JSX in \`node --test\`.
-11. **PR Creation Concludes The Task**: When your changes are written and verified, call \`create_pull_request\` and finish immediately.`;
+11. **PR Creation Concludes The Task**: When your changes are written and verified, call \`create_pull_request\` and finish immediately.
+12. **Never Rewrite the Same Files in a Loop**: Once you write a file (e.g. \`LandingPage.tsx\`, \`index.ts\`, \`public/index.html\`), it is saved. NEVER overwrite the same files repeatedly. As soon as your planned files are created, proceed IMMEDIATELY to \`run_tests\` or \`create_pull_request\`.`;
 
 
 export function formatTaskPrompt(task: TaskContext): string {

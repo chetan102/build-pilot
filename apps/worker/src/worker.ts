@@ -303,8 +303,18 @@ export class WorkerService {
         let baselineSuite: any = null;
 
         if (repoName && repoName.includes('/') && process.env.NODE_ENV !== 'test') {
-          const githubToken =
+          let githubToken =
             (job.data.metadata?.githubToken as string) || process.env.GITHUB_TOKEN;
+
+          if (!githubToken && job.data.projectId) {
+            try {
+              const project = await projectRepository.findByIdOrSlug(job.data.projectId);
+              if (project?.encryptedAccessToken) {
+                githubToken = secretsManager.decrypt(project.encryptedAccessToken);
+              }
+            } catch {}
+          }
+
           const repoUrl = githubToken
             ? `https://x-access-token:${githubToken}@github.com/${repoName}.git`
             : `https://github.com/${repoName}.git`;

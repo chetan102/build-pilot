@@ -158,6 +158,7 @@ export async function retryWithBackoff<T>(
 }
 
 export class LoopDetector {
+  private callHistory: string[] = [];
   private failureHistory: Map<string, number> = new Map();
   private maxConsecutiveIdenticalFailures: number;
   private warningThreshold: number;
@@ -168,28 +169,68 @@ export class LoopDetector {
   }
 
   private createFingerprint(name: string, args: unknown): string {
+    if (args && typeof args === 'object') {
+      const a = args as Record<string, any>;
+      if (a.path) {
+        return `${name}::path=${a.path}`;
+      }
+      if (a.command) {
+        return `${name}::cmd=${a.command}`;
+      }
+      if (a.query) {
+        return `${name}::query=${a.query}`;
+      }
+    }
     const serializedArgs = typeof args === 'object' ? JSON.stringify(args) : String(args);
-    return `${name}::${serializedArgs}`;
+    return `${name}::${serializedArgs.slice(0, 100)}`;
   }
 
-  recordCall(name: string, args: unknown, success: boolean): { isLoop: boolean; shouldWarn: boolean; count: number } {
+  recordCall(name: string, args: unknown, success: boolean): { isLoop: boolean; shouldWarn: boolean; count: number; reason?: string } {
     const key = this.createFingerprint(name, args);
+    this.callHistory.push(key);
 
-    if (success) {
+    // 1. Check failure loop
+    if (!success) {
+      const currentCount = (this.failureHistory.get(key) || 0) + 1;
+      this.failureHistory.set(key, currentCount);
+      const shouldWarn = currentCount === this.warningThreshold;
+      const isLoop = currentCount >= this.maxConsecutiveIdenticalFailures;
+      return { isLoop, shouldWarn, count: currentCount, reason: `Repeated tool failure (${currentCount} times)` };
+    } else {
       this.failureHistory.delete(key);
-      return { isLoop: false, shouldWarn: false, count: 0 };
     }
 
-    const currentCount = (this.failureHistory.get(key) || 0) + 1;
-    this.failureHistory.set(key, currentCount);
+    // 2. Check identical action repetition (e.g. calling same action 3+ times in recent history)
+    const recent = this.callHistory.slice(-8);
+    const occurrences = recent.filter((k) => k === key).length;
+    if (occurrences >= 3) {
+      return { isLoop: true, shouldWarn: true, count: occurrences, reason: `Repeated identical action '${key}' detected ${occurrences} times` };
+    }
 
-    const shouldWarn = currentCount === this.warningThreshold;
-    const isLoop = currentCount >= this.maxConsecutiveIdenticalFailures;
+    // 3. Check cyclical pattern of period 2, 3, or 4 (e.g. [A, B, C, A, B, C])
+    const n = this.callHistory.length;
+    for (const period of [2, 3, 4]) {
+      if (n >= period * 2) {
+        const cycle1 = this.callHistory.slice(n - period * 2, n - period);
+        const cycle2 = this.callHistory.slice(n - period);
+        const isMatch = cycle1.every((item, idx) => item === cycle2[idx]);
+        if (isMatch) {
+          if (n >= period * 3) {
+            const cycle0 = this.callHistory.slice(n - period * 3, n - period * 2);
+            if (cycle0.every((item, idx) => item === cycle2[idx])) {
+              return { isLoop: true, shouldWarn: true, count: 3, reason: `Cyclical loop pattern of length ${period} detected repeating 3 times: [${cycle2.join(' -> ')}]` };
+            }
+          }
+          return { isLoop: false, shouldWarn: true, count: 2, reason: `Cyclical pattern of length ${period} detected repeating: [${cycle2.join(' -> ')}]` };
+        }
+      }
+    }
 
-    return { isLoop, shouldWarn, count: currentCount };
+    return { isLoop: false, shouldWarn: false, count: 0 };
   }
 
   reset(): void {
     this.failureHistory.clear();
+    this.callHistory = [];
   }
 }

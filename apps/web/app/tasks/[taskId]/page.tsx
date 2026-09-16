@@ -29,6 +29,7 @@ import {
   Layers,
   FlaskConical,
   Cpu,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -40,6 +41,7 @@ import {
   cancelTask,
   deleteTask,
   mergeTaskPullRequest,
+  createTaskPullRequest,
   TaskSummary,
   TaskRunSummary,
   AgentStepSummary,
@@ -64,6 +66,7 @@ export default function TaskDetailPage() {
   const [mergeLoading, setMergeLoading] = React.useState<boolean>(false);
   const [mergeSuccess, setMergeSuccess] = React.useState<boolean>(false);
   const [mergeError, setMergeError] = React.useState<string | null>(null);
+  const [prCreating, setPrCreating] = React.useState<boolean>(false);
 
   const { events, isConnected } = useTaskEvents(taskId);
   const isPrMerged = mergeSuccess || events.some((e) => e.type === 'PULL_REQUEST_MERGED');
@@ -158,6 +161,20 @@ export default function TaskDetailPage() {
       alert(`Merge failed: ${err.message}`);
     } finally {
       setMergeLoading(false);
+    }
+  };
+
+  const handleCreatePR = async () => {
+    if (!taskId) return;
+    setPrCreating(true);
+    try {
+      const res = await createTaskPullRequest(taskId);
+      alert(`Pull Request #${res.prNumber} opened successfully on GitHub!`);
+      await loadDetails();
+    } catch (err: any) {
+      alert(`Could not create Pull Request: ${err.message}\n\nPlease ensure you are logged in with GitHub with 'repo' access.`);
+    } finally {
+      setPrCreating(false);
     }
   };
 
@@ -320,15 +337,26 @@ export default function TaskDetailPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {task.prUrl && (
+          {task.prUrl ? (
             <a href={task.prUrl} target="_blank" rel="noreferrer">
-              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs">
+              <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 text-xs shadow-sm">
                 <GitPullRequest className="h-4 w-4" />
-                <span>View PR #{task.prNumber || 42}</span>
+                <span>View PR #{task.prNumber || ''}</span>
                 <ExternalLink className="h-3 w-3 ml-0.5 opacity-80" />
               </Button>
             </a>
-          )}
+          ) : isCompleted ? (
+            <Button
+              size="sm"
+              onClick={handleCreatePR}
+              disabled={actionLoading || prCreating}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 text-xs shadow-sm font-semibold"
+              title="Push branch and open Pull Request on GitHub"
+            >
+              {prCreating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <GitPullRequest className="h-3.5 w-3.5" />}
+              <span>{prCreating ? 'Opening PR on GitHub...' : 'Create Pull Request'}</span>
+            </Button>
+          ) : null}
 
           {isRunning && (
             <Button
@@ -644,11 +672,28 @@ export default function TaskDetailPage() {
                   )}
                 </div>
               ) : (
-                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600">
-                  {isCompleted ? (
-                    <p>No remote Pull Request URL was generated for this run.</p>
-                  ) : (
-                    <p>Task is running. When completed, the Pull Request URL and one-click Merge button will appear here.</p>
+                <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-slate-800">
+                      {isCompleted ? 'Task completed — No Pull Request linked yet' : 'Pull Request pending'}
+                    </p>
+                    <p className="text-slate-500 mt-0.5">
+                      {isCompleted
+                        ? 'All automated code changes and tests are ready on your task branch. Click below to push and open a GitHub Pull Request.'
+                        : 'When completed, the Pull Request URL and one-click Merge button will appear here.'}
+                    </p>
+                  </div>
+                  {isCompleted && (
+                    <Button
+                      size="sm"
+                      onClick={handleCreatePR}
+                      disabled={actionLoading || prCreating}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 text-xs font-semibold whitespace-nowrap shadow-sm"
+                      title="Push branch and open Pull Request on GitHub"
+                    >
+                      {prCreating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <GitPullRequest className="h-3.5 w-3.5" />}
+                      <span>{prCreating ? 'Opening PR on GitHub...' : 'Create Pull Request'}</span>
+                    </Button>
                   )}
                 </div>
               )}

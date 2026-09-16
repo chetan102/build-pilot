@@ -99,6 +99,29 @@ export const runTestsTool = defineTool({
       }
     }
 
+    // If execution failed due to uncompiled JSX or modern TS syntax in native Node test runner,
+    // auto-fallback to npx tsx --test for on-the-fly transpilation
+    const combinedOutput = `${result.stdout} ${result.stderr}`;
+    if (
+      result.exitCode !== 0 &&
+      (combinedOutput.includes("Unexpected token '<'") ||
+        combinedOutput.includes('Unknown file extension') ||
+        combinedOutput.includes('Cannot use import statement outside a module'))
+    ) {
+      const tsxCmd = input.testFile ? `npx tsx --test ${input.testFile}` : 'npx tsx --test';
+      const tsxResult = await defaultDockerRunner.run({
+        command: tsxCmd,
+        workspaceDir: context.workspaceDir,
+        timeoutMs: input.timeoutMs || 120000,
+        signal: context.signal,
+        useLocalFallback: process.env.BUILDPILOT_LOCAL_EXEC === 'true' || process.env.NODE_ENV === 'test',
+      });
+      if (tsxResult.exitCode === 0) {
+        result = tsxResult;
+        command = tsxCmd;
+      }
+    }
+
     const parsed = parseTestOutput(result.stdout, result.stderr);
     const passed = result.exitCode === 0 || (parsed.total > 0 && parsed.failed === 0);
     const failedTestNames = parsed.testCases.filter((t) => t.status === 'fail').map((t) => t.name);

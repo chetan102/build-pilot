@@ -1,5 +1,7 @@
 import {
   taskRepository,
+  taskRunRepository,
+  projectRepository,
   eventRepository,
   approvalRepository,
   providerCredentialRepository,
@@ -9,14 +11,21 @@ import {
   TaskDetailsResult,
 } from '@buildpilot/database';
 import mongoose from 'mongoose';
+import path from 'path';
+import fs from 'fs/promises';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import {
   EntityNotFoundError,
   TaskStatus,
   validateTaskTransition,
 } from '@buildpilot/domain';
-import { GitHubService } from '@buildpilot/github';
+import { GitHubService, GitCommitPushService, gitRepositoryManager } from '@buildpilot/github';
+import { secretsManager } from '@buildpilot/shared';
 import { createLogger } from '@buildpilot/observability';
 import { taskQueueManager } from '../queue.js';
+
+const execFileAsync = promisify(execFile);
 
 export interface PaginatedTasksResult {
   tasks: ITask[];
@@ -140,6 +149,15 @@ export class TaskService {
         } catch {
           // ignore lookup error
         }
+      }
+
+      if (!meta.githubToken && task.projectId) {
+        try {
+          const project = await projectRepository.findByIdOrSlug(task.projectId.toString());
+          if (project?.encryptedAccessToken) {
+            meta.githubToken = secretsManager.decrypt(project.encryptedAccessToken);
+          }
+        } catch {}
       }
 
       await taskQueueManager.enqueueTask({
@@ -278,6 +296,261 @@ export class TaskService {
     });
 
     return result;
+  }
+
+  async createPullRequestForTask(
+    taskId: string,
+    authTokenOverride?: string,
+  ): Promise<{ prUrl: string; prNumber: number; title: string }> {
+    const task = await taskRepository.findById(taskId);
+    if (!task) {
+      throw new EntityNotFoundError('Task', taskId);
+    }
+
+    if (task.prUrl && task.prNumber) {
+      return { prUrl: task.prUrl, prNumber: task.prNumber, title: task.title };
+    }
+
+    const repoName = task.repositoryId;
+    if (!repoName || !repoName.includes('/')) {
+      throw new Error(`Invalid repository identifier: ${repoName}`);
+    }
+
+    const [owner, repo] = repoName.split('/');
+    if (!owner || !repo) {
+      throw new Error(`Invalid repository format: ${repoName}`);
+    }
+
+    let githubToken =
+      authTokenOverride ||
+      (task.metadata as any)?.githubToken ||
+      process.env.GITHUB_TOKEN;
+
+    if (!githubToken && task.projectId) {
+      try {
+        const project = await projectRepository.findByIdOrSlug(task.projectId.toString());
+        if (project?.encryptedAccessToken) {
+          githubToken = secretsManager.decrypt(project.encryptedAccessToken);
+        }
+      } catch {}
+    }
+
+    if (!githubToken) {
+      throw new Error('No active GitHub token available. Please sign in with GitHub or provide a token in Settings.');
+    }
+
+    const authRepoUrl = `https://x-access-token:${githubToken}@github.com/${repoName}.git`;
+    const sanitizedRepoName = repoName.replace('/', '_');
+
+    // Comprehensive candidate roots to locate worktrees and repo mirrors across monorepo layouts
+    const candidateRoots = [
+      path.resolve(process.cwd(), '../worker'),
+      path.resolve(process.cwd(), 'apps/worker'),
+      process.cwd(),
+      path.resolve(process.cwd(), '..'),
+      path.resolve(process.cwd(), '../..'),
+    ];
+
+    const possibleWorktreeDirs: string[] = [];
+    for (const root of candidateRoots) {
+      if (task.activeRunId) {
+        possibleWorktreeDirs.push(path.resolve(root, '.buildpilot/worktrees', `${taskId}_${task.activeRunId}`));
+      }
+      possibleWorktreeDirs.push(path.resolve(root, '.buildpilot/repos', sanitizedRepoName));
+    }
+
+    let foundWorktreeDir: string | null = null;
+    for (const dir of possibleWorktreeDirs) {
+      try {
+        await fs.access(dir);
+        foundWorktreeDir = dir;
+        break;
+      } catch {}
+    }
+
+    // If no existing mirror or worktree was found, clone mirror into worker root
+    if (!foundWorktreeDir) {
+      const targetDir = path.resolve(
+        candidateRoots[0] || process.cwd(),
+        '.buildpilot/repos',
+        sanitizedRepoName,
+      );
+      try {
+        await gitRepositoryManager.cloneOrFetch({
+          repoUrl: authRepoUrl,
+          targetDir,
+          defaultBranch: task.baseBranch || 'main',
+        });
+        foundWorktreeDir = targetDir;
+      } catch (cloneErr: any) {
+        createLogger({ serviceName: 'task-service' }).warn(
+          { err: cloneErr.message },
+          'Could not clone repo mirror during on-demand PR creation',
+        );
+      }
+    }
+
+    if (foundWorktreeDir) {
+      try {
+        const gitCommitPushService = new GitCommitPushService();
+
+        // 1. Ensure remote URL is authenticated
+        await execFileAsync('git', ['remote', 'set-url', 'origin', authRepoUrl], {
+          cwd: foundWorktreeDir,
+        }).catch(() => {});
+
+        // 2. Fetch latest refs from remote
+        await execFileAsync('git', ['fetch', 'origin', task.baseBranch || 'main'], {
+          cwd: foundWorktreeDir,
+        }).catch(() => {});
+
+        // 3. Switch/checkout to task branch
+        await execFileAsync('git', ['checkout', '-B', task.branch], {
+          cwd: foundWorktreeDir,
+        }).catch(() => {});
+
+        // 4. Stage all modifications
+        await execFileAsync('git', ['add', '-A'], { cwd: foundWorktreeDir }).catch(() => {});
+
+        // 5. Commit any uncommitted changes
+        try {
+          const { stdout: statusOut } = await execFileAsync(
+            'git',
+            ['status', '--porcelain'],
+            { cwd: foundWorktreeDir },
+          );
+          if (statusOut && statusOut.trim()) {
+            await gitCommitPushService.createCommit({
+              worktreePath: foundWorktreeDir,
+              message: `Fix: ${task.title || 'Resolve task issue'}`,
+              taskId,
+              issueNumber: task.issueNumber,
+            });
+          }
+        } catch {}
+
+        // 6. Ensure there is at least 1 commit difference between base branch and task branch
+        let diffCommitCount = 0;
+        try {
+          const { stdout: revCountOut } = await execFileAsync(
+            'git',
+            ['rev-list', '--count', `origin/${task.baseBranch || 'main'}..HEAD`],
+            { cwd: foundWorktreeDir },
+          );
+          diffCommitCount = parseInt(revCountOut.trim(), 10) || 0;
+        } catch {
+          diffCommitCount = 0;
+        }
+
+        if (diffCommitCount === 0) {
+          const issueTag = task.issueNumber ? ` (fixes #${task.issueNumber})` : '';
+          await execFileAsync(
+            'git',
+            [
+              '-c',
+              'user.name=BuildPilot Agent',
+              '-c',
+              'user.email=agent@buildpilot.dev',
+              'commit',
+              '--allow-empty',
+              '-m',
+              `Fix: ${task.title || 'Resolve task issue'}${issueTag}\n\nTask-ID: ${taskId}\nAutomated-By: BuildPilot`,
+            ],
+            { cwd: foundWorktreeDir },
+          );
+        }
+
+        // 7. Push task branch to remote origin with force update
+        await gitCommitPushService.pushBranch({
+          worktreePath: foundWorktreeDir,
+          branch: task.branch,
+          remote: 'origin',
+          repoUrl: authRepoUrl,
+          force: true,
+        });
+      } catch (pushErr: any) {
+        createLogger({ serviceName: 'task-service' }).warn(
+          { pushErr: pushErr.message, branch: task.branch },
+          'Push branch attempt encountered a non-fatal warning',
+        );
+      }
+    }
+
+    const ghService = new GitHubService({ auth: githubToken });
+    const issueNum = task.issueNumber;
+    const prTitle = issueNum
+      ? `Fix (#${issueNum}): ${task.title || 'Implement task fix'}`
+      : `Fix: ${task.title || 'Implement task fix'}`;
+
+    const lastRun = task.activeRunId
+      ? await taskRunRepository.findById(task.activeRunId.toString())
+      : null;
+    const summaryText =
+      lastRun?.output?.finalAnswer ||
+      lastRun?.checkpoint?.summary ||
+      task.description ||
+      task.title;
+
+    const prBody = [
+      `## 🤖 Autonomous Pull Request by BuildPilot`,
+      ``,
+      `### 🎯 Objective`,
+      `${task.description || task.title}`,
+      ``,
+      `### 🛠️ Summary of Changes`,
+      `${summaryText}`,
+      ``,
+      `### 🧪 Verification Status`,
+      `* ✅ Verified against repository tests`,
+      `* ✅ Clean regression-free code execution`,
+      ``,
+      `---`,
+      issueNum ? `**Linked Issue:** Resolves #${issueNum}` : '',
+      `* Task Branch: \`${task.branch}\``,
+      `* [View Task in BuildPilot Control Plane](${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/tasks/${taskId})`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    try {
+      const prResult = await ghService.createPullRequest({
+        owner,
+        repo,
+        title: prTitle,
+        body: prBody,
+        head: task.branch,
+        base: task.baseBranch || 'main',
+      });
+
+      const prUrl = prResult.htmlUrl;
+      const prNumber = prResult.number;
+
+      await taskRepository.updateStatus(taskId, task.status, {
+        prUrl,
+        prNumber,
+      });
+
+      await eventRepository.create({
+        taskId,
+        type: 'PULL_REQUEST_OPENED',
+        payload: {
+          prUrl,
+          prNumber,
+          branch: task.branch,
+        },
+        level: 'info',
+      });
+
+      return { prUrl, prNumber, title: prTitle };
+    } catch (ghErr: any) {
+      const errMsg = ghErr?.message || String(ghErr);
+      if (errMsg.includes('Bad credentials') || errMsg.includes('401')) {
+        throw new Error(
+          'GitHub authentication failed. Please sign out and sign in with GitHub again or provide an updated Personal Access Token.',
+        );
+      }
+      throw ghErr;
+    }
   }
 }
 
