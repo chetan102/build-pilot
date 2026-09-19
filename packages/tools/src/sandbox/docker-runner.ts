@@ -84,7 +84,13 @@ export class DockerSandboxRunner {
     dockerArgs.push('-e', 'CI=true');
     dockerArgs.push('-e', 'FORCE_COLOR=0');
     dockerArgs.push(image);
-    const envBootstrap = 'export PATH="$PATH:/workspace/node_modules/.bin"; (corepack enable >/dev/null 2>&1 || true);';
+    const envBootstrap = [
+      'export PATH="$PATH:/workspace/node_modules/.bin";',
+      '(corepack enable >/dev/null 2>&1 || true);',
+      'pnpm() { if command -v pnpm >/dev/null 2>&1; then command pnpm "$@"; else npx --yes pnpm "$@"; fi; };',
+      'yarn() { if command -v yarn >/dev/null 2>&1; then command yarn "$@"; else npx --yes yarn "$@"; fi; };',
+      'bun() { if command -v bun >/dev/null 2>&1; then command bun "$@"; else npx --yes bun "$@"; fi; };',
+    ].join(' ');
     dockerArgs.push('sh', '-c', `${envBootstrap} ${command}`);
 
     return dockerArgs;

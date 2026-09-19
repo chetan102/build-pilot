@@ -11,6 +11,18 @@ Follow this EXACT step sequence for high-impact, token-efficient delivery:
 - **Step 3 (Verify)**: Run \`run_tests\` on the relevant test file. If no automated tests exist for the changed module, proceed directly to delivery.
 - **Step 4 (Deliver)**: Call \`create_pull_request\` with a clean title and summary. The task concludes immediately upon PR creation.
 
+# MODERN UI / UX & DESIGN STANDARDS (FOR FRONTEND & UI TASKS):
+When creating or updating UI components, landing pages, or frontends:
+1. **Modern Aesthetic & Polish**:
+   - Use high-contrast, modern typography (clean sans-serif: Inter / SF Pro / system font stack). Use \`letter-spacing: -0.02em\` on main headings and \`line-height: 1.6\` on body copy.
+   - Use sophisticated palettes: Zinc/Slate neutral backgrounds (\`#09090b\` / \`#0f172a\` for dark mode, or \`#f8fafc\` / \`#ffffff\` for crisp light mode) with vibrant accent gradients (indigo-to-purple, emerald-to-teal, or cyan-to-blue).
+   - Use modern card styling: Translucent glassmorphism (\`backdrop-filter: blur(12px)\`), subtle borders (\`1px solid rgba(255,255,255,0.08)\` or \`1px solid #e2e8f0\`), and soft ambient shadows.
+2. **Component Modularity & Semantic Structure**:
+   - Organize UI into clean semantic sections: \`<header>\`/\`<nav>\` (Navbar with logo and action CTA), \`<main>\` with Hero section (catchy heading, gradient subtitle, primary + secondary CTA buttons), Features Grid (icon badges, titles, descriptions), Stats / Social Proof section, and \`<footer>\`.
+   - Never write messy inline style hacks when CSS classes / CSS modules / Tailwind are available.
+3. **Micro-Interactions & Responsiveness**:
+   - Add smooth hover transforms (\`transform: translateY(-2px)\`, \`transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1)\`), pill badges (\`rounded-full px-3 py-1 text-xs font-medium\`), and responsive CSS Grid/Flexbox layouts that work seamlessly on both mobile and desktop.
+
 # SENIOR SOFTWARE ENGINEER MINDSET & CODEBASE HARMONY:
 1. **Context & Tech-Stack Awareness**:
    - Always match the repository's exact technology and idioms (React/Next, Node, Python, Go, Rust, Java, Vue, HTML/CSS).
@@ -77,7 +89,7 @@ export function formatRepoContext(repo: RepoContext): string {
     const scriptKeys = Object.keys(repo.packageInfo.scripts);
     if (scriptKeys.length > 0) {
       sections.push(
-        `**Available Project Scripts**: ${scriptKeys.map((s) => `\`pnpm run ${s}\``).join(', ')}`,
+        `**Available Project Scripts**: ${scriptKeys.map((s) => `\`npm run ${s}\``).join(', ')}`,
       );
     }
   }

@@ -360,7 +360,7 @@ export class WorkerService {
                 } catch {}
 
                 const isPnpm = pkgJson.packageManager?.includes('pnpm') || (await fs.stat(path.join(workspaceDir, 'pnpm-lock.yaml')).then(() => true).catch(() => false));
-                const testCmd = pkgJson.scripts?.test ? (isPnpm ? 'pnpm test' : 'npm test') : 'npm test';
+                const testCmd = pkgJson.scripts?.test ? (isPnpm ? 'pnpm test' : 'npm test') : '';
                 const pm = isPnpm ? 'pnpm' : 'npm';
                 const allDeps = Object.keys({ ...(pkgJson.dependencies || {}), ...(pkgJson.devDependencies || {}) });
 
@@ -371,7 +371,7 @@ export class WorkerService {
                     languages: ['JavaScript', 'TypeScript'],
                     frameworks: allDeps.filter((f) => ['react', 'next', 'express', 'vitest', 'jest', 'vue', 'svelte', 'tailwind'].some((k) => f.includes(k))),
                     packageManager: pm,
-                    testFramework: allDeps.some((f) => f.includes('vitest')) ? 'vitest' : allDeps.some((f) => f.includes('jest')) ? 'jest' : 'node:test',
+                    testFramework: allDeps.some((f) => f.includes('vitest')) ? 'vitest' : allDeps.some((f) => f.includes('jest')) ? 'jest' : (testCmd ? 'node:test' : 'none'),
                     testCommand: testCmd,
                     buildTool: pkgJson.scripts?.build ? `${pm} run build` : '',
                   },
@@ -397,7 +397,7 @@ export class WorkerService {
               pastLearnings: repoKnowledge?.pastLearnings || [],
               packageInfo: {
                 scripts: {
-                  test: repoKnowledge?.techStack?.testCommand || 'npm test',
+                  ...(repoKnowledge?.techStack?.testCommand ? { test: repoKnowledge.techStack.testCommand } : {}),
                   ...(repoKnowledge?.techStack?.buildTool ? { build: repoKnowledge.techStack.buildTool } : {}),
                 },
               },
@@ -405,24 +405,46 @@ export class WorkerService {
 
             // Execute Baseline Test Run prior to agent modifications (Phase 3)
             try {
-              const testRunner = new DockerSandboxRunner();
-              const testCmd = repoKnowledge?.techStack?.testCommand || 'npm test';
-              const rawBaseline = await testRunner.run({
-                workspaceDir,
-                command: testCmd,
-                timeoutMs: 90000,
-              });
-              baselineSuite = parseTestOutput(rawBaseline.stdout, rawBaseline.stderr);
-              const baselineTestResult = {
-                exitCode: rawBaseline.exitCode,
-                total: baselineSuite.total,
-                passed: baselineSuite.passed,
-                failed: baselineSuite.failed,
-                failedTests: baselineSuite.testCases.filter((t: any) => t.status === 'fail').map((t: any) => t.name),
-                summary: `${baselineSuite.passed} passed, ${baselineSuite.failed} failed out of ${baselineSuite.total} test(s)`,
-              };
-              await this.taskRunRepo.update(runId, { baselineTestResult });
-              this.logger.info({ baselineTestResult }, 'Baseline test run recorded before agent modifications');
+              const testCmd = repoKnowledge?.techStack?.testCommand || '';
+              if (testCmd) {
+                const testRunner = new DockerSandboxRunner();
+                let rawBaseline = await testRunner.run({
+                  workspaceDir,
+                  command: testCmd,
+                  timeoutMs: 90000,
+                });
+                if (rawBaseline.exitCode === 127 && testCmd !== 'npm test') {
+                  this.logger.warn({ originalCommand: testCmd }, 'Test command failed with exit 127; falling back to npm test');
+                  rawBaseline = await testRunner.run({
+                    workspaceDir,
+                    command: 'npm test',
+                    timeoutMs: 90000,
+                  });
+                }
+                baselineSuite = parseTestOutput(rawBaseline.stdout, rawBaseline.stderr);
+                const baselineTestResult = {
+                  exitCode: rawBaseline.exitCode,
+                  total: baselineSuite.total,
+                  passed: baselineSuite.passed,
+                  failed: baselineSuite.failed,
+                  failedTests: baselineSuite.testCases.filter((t: any) => t.status === 'fail').map((t: any) => t.name),
+                  summary: `${baselineSuite.passed} passed, ${baselineSuite.failed} failed out of ${baselineSuite.total} test(s)`,
+                };
+                await this.taskRunRepo.update(runId, { baselineTestResult });
+                this.logger.info({ baselineTestResult }, 'Baseline test run recorded before agent modifications');
+              } else {
+                baselineSuite = { total: 0, passed: 0, failed: 0, testCases: [] };
+                const baselineTestResult = {
+                  exitCode: 0,
+                  total: 0,
+                  passed: 0,
+                  failed: 0,
+                  failedTests: [],
+                  summary: 'No test suite configured in repository (Skipped)',
+                };
+                await this.taskRunRepo.update(runId, { baselineTestResult });
+                this.logger.info('No test script configured in repository; baseline test skipped cleanly');
+              }
             } catch (bErr: any) {
               this.logger.warn({ err: bErr.message }, 'Baseline test run skipped/failed (non-fatal)');
             }
@@ -541,18 +563,28 @@ export class WorkerService {
         // Post-execution test delta computation (Phase 3)
         if (worktreeInfo && baselineSuite) {
           try {
-            const testRunner = new DockerSandboxRunner();
             const repoKnowledge = await repositoryKnowledgeRepository.findByRepositoryId(repoName);
-            const testCmd = repoKnowledge?.techStack?.testCommand || 'npm test';
-            const rawPostFix = await testRunner.run({
-              workspaceDir: worktreeInfo.worktreePath,
-              command: testCmd,
-              timeoutMs: 90000,
-            });
-            const postSuite = parseTestOutput(rawPostFix.stdout, rawPostFix.stderr);
-            const testDelta = computeTestDelta(baselineSuite, postSuite);
-            await this.taskRunRepo.update(runId, { testDelta });
-            this.logger.info({ testDelta }, 'Post-fix test delta computed and saved');
+            const testCmd = repoKnowledge?.techStack?.testCommand || '';
+            if (testCmd) {
+              const testRunner = new DockerSandboxRunner();
+              let rawPostFix = await testRunner.run({
+                workspaceDir: worktreeInfo.worktreePath,
+                command: testCmd,
+                timeoutMs: 90000,
+              });
+              if (rawPostFix.exitCode === 127 && testCmd !== 'npm test') {
+                this.logger.warn({ originalCommand: testCmd }, 'Post-fix test command failed with exit 127; falling back to npm test');
+                rawPostFix = await testRunner.run({
+                  workspaceDir: worktreeInfo.worktreePath,
+                  command: 'npm test',
+                  timeoutMs: 90000,
+                });
+              }
+              const postSuite = parseTestOutput(rawPostFix.stdout, rawPostFix.stderr);
+              const testDelta = computeTestDelta(baselineSuite, postSuite);
+              await this.taskRunRepo.update(runId, { testDelta });
+              this.logger.info({ testDelta }, 'Post-fix test delta computed and saved');
+            }
           } catch (postTestErr: any) {
             this.logger.warn({ err: postTestErr.message }, 'Post-fix test delta calculation skipped (non-fatal)');
           }

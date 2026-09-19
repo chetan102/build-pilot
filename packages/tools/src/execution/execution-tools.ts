@@ -143,25 +143,35 @@ export const runTestsTool = defineTool({
       }
     }
 
+    const isMissingTestScript =
+      result.stderr.includes('Missing script: "test"') ||
+      result.stderr.includes('missing script: test') ||
+      result.stdout.includes('no test specified') ||
+      result.stderr.includes('no test specified');
+
     const parsed = parseTestOutput(result.stdout, result.stderr);
-    const passed = result.exitCode === 0 || (parsed.total > 0 && parsed.failed === 0);
+    const passed = isMissingTestScript || result.exitCode === 0 || (parsed.total > 0 && parsed.failed === 0);
     const failedTestNames = parsed.testCases.filter((t) => t.status === 'fail').map((t) => t.name);
 
     const failureSummary = parsed.total > 0
       ? `Tests failed: ${parsed.failed} of ${parsed.total} test(s) failed (${failedTestNames.join(', ')})`
       : `Tests failed with exit code ${result.exitCode}`;
 
+    const summary = isMissingTestScript
+      ? 'No test script configured in package.json (Skipped verification)'
+      : passed
+      ? `All ${parsed.total || 'executed'} test(s) passed successfully.`
+      : failureSummary;
+
     return {
       command,
       passed,
-      exitCode: result.exitCode,
+      exitCode: isMissingTestScript ? 0 : result.exitCode,
       total: parsed.total,
       passedCount: parsed.passed,
       failedCount: parsed.failed,
       failedTests: failedTestNames,
-      summary: passed
-        ? `All ${parsed.total || 'executed'} test(s) passed successfully.`
-        : failureSummary,
+      summary,
       stdout: cleanLogOutput(result.stdout, 3000),
       stderr: cleanLogOutput(result.stderr, 1500),
       durationMs: result.durationMs,
