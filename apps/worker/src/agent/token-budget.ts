@@ -241,7 +241,10 @@ export function compactOlderAssistantWrites(
   const writeIndices: number[] = [];
   for (let i = 0; i < history.length; i++) {
     const msg = history[i];
-    if (msg?.role === 'assistant' && msg.toolCalls?.some((tc) => tc.name === 'write_file')) {
+    if (
+      msg?.role === 'assistant' &&
+      msg.toolCalls?.some((tc) => tc.name === 'write_file' || tc.name === 'edit_file')
+    ) {
       writeIndices.push(i);
     }
   }
@@ -259,10 +262,10 @@ export function compactOlderAssistantWrites(
     }
 
     const modifiedToolCalls = msg.toolCalls.map((tc) => {
-      if (tc.name === 'write_file' && tc.arguments) {
+      if ((tc.name === 'write_file' || tc.name === 'edit_file') && tc.arguments) {
         try {
           const args = typeof tc.arguments === 'string' ? JSON.parse(tc.arguments) : tc.arguments;
-          if (args.content && typeof args.content === 'string') {
+          if (tc.name === 'write_file' && args.content && typeof args.content === 'string') {
             const lineCount = args.content.split('\n').length;
             compactedCount++;
             return {
@@ -271,6 +274,16 @@ export function compactOlderAssistantWrites(
                 path: args.path,
                 content: `(File content written: ${lineCount} lines — compacted from earlier step)`,
                 createDirectories: args.createDirectories,
+              },
+            };
+          } else if (tc.name === 'edit_file' && args.replacementContent) {
+            compactedCount++;
+            return {
+              ...tc,
+              arguments: {
+                path: args.path,
+                targetContent: '(Target block snippet — compacted)',
+                replacementContent: '(Replacement block snippet — compacted)',
               },
             };
           }

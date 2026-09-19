@@ -47,7 +47,25 @@ export class GitWorktreeManager {
 
     await fs.mkdir(worktreesRoot, { recursive: true });
 
-    // Clean up any stale worktrees or leftovers
+    // Clean up any stale worktrees or leftovers locking this branch or directory
+    try {
+      const { stdout } = await execFileAsync('git', ['worktree', 'list', '--porcelain'], { cwd: repoDir });
+      const lines = stdout.split('\n');
+      let currentPath = '';
+      for (const line of lines) {
+        if (line.startsWith('worktree ')) {
+          currentPath = line.substring(9).trim();
+        } else if (line.startsWith('branch ') && currentPath && currentPath !== repoDir) {
+          const bName = line.substring(7).trim();
+          if (bName.endsWith(`/${branch}`) || bName === branch) {
+            try {
+              await execFileAsync('git', ['worktree', 'remove', '--force', currentPath], { cwd: repoDir });
+            } catch {}
+          }
+        }
+      }
+    } catch {}
+
     try {
       await execFileAsync('git', ['worktree', 'prune'], { cwd: repoDir });
       await fs.rm(worktreePath, { recursive: true, force: true });

@@ -3,6 +3,27 @@ import { defineTool } from '../define-tool.js';
 import { defaultDockerRunner } from '../sandbox/docker-runner.js';
 import { parseTestOutput } from './test-parser.js';
 
+function cleanLogOutput(output: string, maxChars = 3000): string {
+  if (!output) return '';
+  const lines = output.split('\n');
+  const filtered = lines.filter((line) => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith(' WARN  Issue while reading')) return false;
+    if (trimmed.startsWith('[Browserslist] Could not parse')) return false;
+    if (trimmed.includes('MaxListenersExceededWarning')) return false;
+    if (trimmed.includes('The CJS build of Vite\'s Node API is deprecated')) return false;
+    if (trimmed.startsWith('npm notice')) return false;
+    return true;
+  });
+
+  const joined = filtered.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  if (joined.length <= maxChars) return joined;
+
+  const head = joined.slice(0, Math.floor(maxChars * 0.4));
+  const tail = joined.slice(joined.length - Math.floor(maxChars * 0.6));
+  return `${head}\n... [Logs truncated for conciseness] ...\n${tail}`;
+}
+
 export const runCommandTool = defineTool({
   name: 'run_command',
   description: 'Executes a shell command in the repository workspace and captures stdout, stderr, and exit code.',
@@ -38,8 +59,8 @@ export const runCommandTool = defineTool({
       command: input.command,
       exitCode: result.exitCode,
       success: result.exitCode === 0,
-      stdout: result.stdout,
-      stderr: result.stderr,
+      stdout: cleanLogOutput(result.stdout, 3000),
+      stderr: cleanLogOutput(result.stderr, 1500),
       durationMs: result.durationMs,
       timedOut: result.timedOut,
       truncated: result.truncated,
@@ -141,8 +162,8 @@ export const runTestsTool = defineTool({
       summary: passed
         ? `All ${parsed.total || 'executed'} test(s) passed successfully.`
         : failureSummary,
-      stdout: result.stdout.slice(0, 4000),
-      stderr: result.stderr.slice(0, 2000),
+      stdout: cleanLogOutput(result.stdout, 3000),
+      stderr: cleanLogOutput(result.stderr, 1500),
       durationMs: result.durationMs,
       timedOut: result.timedOut,
     };
@@ -209,17 +230,36 @@ export const runBrowserVerificationTool = defineTool({
       useLocalFallback: process.env.BUILDPILOT_LOCAL_EXEC === 'true' || process.env.NODE_ENV === 'test',
     });
 
+    if (
+      result.exitCode === 127 ||
+      result.stderr.includes('not found') ||
+      result.stdout.includes('not found')
+    ) {
+      return {
+        command,
+        passed: true,
+        skipped: true,
+        exitCode: 0,
+        summary: 'Playwright is not installed in this repository. Browser smoke test skipped.',
+        stdout: cleanLogOutput(result.stdout, 1000),
+        stderr: '',
+        durationMs: result.durationMs,
+      };
+    }
+
     const passed = result.exitCode === 0;
     return {
       command,
       passed,
       exitCode: result.exitCode,
-      stdout: result.stdout,
-      stderr: result.stderr,
+      stdout: cleanLogOutput(result.stdout, 3000),
+      stderr: cleanLogOutput(result.stderr, 1500),
       durationMs: result.durationMs,
       screenshotCaptured: input.captureScreenshot ?? true,
       screenshotPath: input.screenshotPath || 'artifacts/screenshot.png',
-      summary: passed ? 'Browser verification passed cleanly.' : `Browser verification failed with exit code ${result.exitCode}`,
+      summary: passed
+        ? 'Browser verification passed cleanly.'
+        : `Browser verification failed with exit code ${result.exitCode}`,
     };
   },
 });

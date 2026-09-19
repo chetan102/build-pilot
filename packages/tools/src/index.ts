@@ -12,7 +12,7 @@ export * from './mcp/mcp-safety.js';
 
 
 import { toolRegistry } from './registry.js';
-import { readFileTool, writeFileTool } from './repository/file-tools.js';
+import { readFileTool, writeFileTool, editFileTool } from './repository/file-tools.js';
 import { listFilesTool, searchCodeTool } from './repository/search-tools.js';
 import { gitStatusTool, gitDiffTool } from './repository/git-tools.js';
 import { runCommandTool, runTestsTool, createPullRequestTool, runBrowserVerificationTool } from './execution/execution-tools.js';
@@ -20,6 +20,7 @@ import { runCommandTool, runTestsTool, createPullRequestTool, runBrowserVerifica
 export function registerDefaultTools(registry = toolRegistry) {
   registry.register(readFileTool);
   registry.register(writeFileTool);
+  registry.register(editFileTool);
   registry.register(listFilesTool);
   registry.register(searchCodeTool);
   registry.register(gitStatusTool);

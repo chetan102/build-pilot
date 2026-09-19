@@ -393,7 +393,7 @@ export class AgentCoreLoop {
           }
         }
 
-        if (toolCall.name === 'write_file') {
+        if (toolCall.name === 'write_file' || toolCall.name === 'edit_file') {
           const rawArgs = typeof toolCall.arguments === 'object' ? (toolCall.arguments as any) : {};
           const targetPath = rawArgs?.path || '';
           const currentWrites = (fileWriteCounts.get(targetPath) || 0) + 1;
@@ -402,17 +402,17 @@ export class AgentCoreLoop {
 
           if (currentWrites === 2) {
             pendingWarnings.push(
-              `[SYSTEM WARNING]: You have rewritten '${targetPath}' twice without testing or creating a PR. Do NOT keep rewriting the same file in a loop. Proceed immediately to run_tests or call create_pull_request.`
+              `[SYSTEM WARNING]: You have modified '${targetPath}' twice without verifying or creating a PR. Do NOT keep modifying the same file in a loop. Proceed immediately to run_tests or call create_pull_request.`
             );
           } else if (currentWrites >= 3) {
             isIntercepted = true;
             toolResult = {
               path: targetPath,
               cached: true,
-              message: `[CIRCUIT BREAKER]: Overwriting '${targetPath}' is blocked because you have already written this file 3 times. Please call create_pull_request immediately to submit your changes and complete the task.`,
+              message: `[CIRCUIT BREAKER]: Modifying '${targetPath}' is blocked because you have already modified this file 3 times. Please call create_pull_request immediately to submit your changes and complete the task.`,
             };
             pendingWarnings.push(
-              `[MANDATE]: File rewrite loop blocked on '${targetPath}'. You MUST call create_pull_request immediately to conclude the task.`
+              `[MANDATE]: File modification loop blocked on '${targetPath}'. You MUST call create_pull_request immediately to conclude the task.`
             );
           }
         }

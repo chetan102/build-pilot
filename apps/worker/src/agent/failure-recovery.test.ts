@@ -115,16 +115,6 @@ describe('Failure Recovery: retryWithBackoff & LoopDetector', () => {
   });
 
   describe('analyzeToolResult', () => {
-    it('detects exitCode 127 as fatal', async () => {
-      const { analyzeToolResult } = await import('./failure-recovery.js');
-      const res = analyzeToolResult('run_command', {
-        exitCode: 127,
-        stderr: 'sh: 1: git: not found\n',
-      });
-      expect(res.isFatal).toBe(true);
-      expect(res.reason).toContain('127');
-    });
-
     it('detects unrecoverable quota / key error patterns as fatal', async () => {
       const { analyzeToolResult } = await import('./failure-recovery.js');
       const res = analyzeToolResult('api_call', {
@@ -134,14 +124,20 @@ describe('Failure Recovery: retryWithBackoff & LoopDetector', () => {
       expect(res.reason).toContain('insufficient_quota');
     });
 
-    it('treats normal tool output and non-fatal errors as non-fatal', async () => {
+    it('treats tool exit codes like 127 or 1 as normal non-fatal feedback', async () => {
       const { analyzeToolResult } = await import('./failure-recovery.js');
-      const res = analyzeToolResult('run_tests', {
+      const res127 = analyzeToolResult('run_command', {
+        exitCode: 127,
+        stderr: 'sh: 1: playwright: not found\n',
+      });
+      expect(res127.isFatal).toBe(false);
+
+      const res1 = analyzeToolResult('run_tests', {
         exitCode: 1,
         stdout: '1 failed, 4 passed',
         stderr: '',
       });
-      expect(res.isFatal).toBe(false);
+      expect(res1.isFatal).toBe(false);
     });
   });
 });

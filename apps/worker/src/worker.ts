@@ -427,10 +427,11 @@ export class WorkerService {
               this.logger.warn({ err: bErr.message }, 'Baseline test run skipped/failed (non-fatal)');
             }
           } catch (gitErr: any) {
-            this.logger.warn(
+            this.logger.error(
               { gitErr: gitErr.message, repoName },
-              'Could not initialize git worktree; using workspace fallback',
+              'Failed to initialize git worktree for repository mirror',
             );
+            throw new Error(`Failed to initialize git worktree for ${repoName}: ${gitErr.message}`);
           }
         }
 

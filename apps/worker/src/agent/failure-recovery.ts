@@ -13,17 +13,10 @@ export interface ToolResultAnalysis {
 }
 
 /**
- * Exit codes that indicate the environment is broken — not a transient error.
- * 127 = command not found, 126 = permission denied / not executable.
- */
-const FATAL_EXIT_CODES = new Set([127, 126]);
-
-/**
- * String patterns in stdout/stderr that indicate an unrecoverable error.
+ * String patterns in stdout/stderr/error that indicate an unrecoverable quota or authentication error.
  * Any match triggers immediate task failure — no retries.
  */
 const FATAL_OUTPUT_PATTERNS = [
-  'command not found',
   'invalid api key',
   'authentication failed',
   'insufficient_quota',
@@ -37,23 +30,14 @@ const FATAL_OUTPUT_PATTERNS = [
 /**
  * Classifies a tool's result as fatal or non-fatal.
  *
- * Fatal results trigger immediate task FAILED — no retry, no model panic loop.
- * This prevents the agent from burning tokens searching for a missing binary,
- * or retrying when the API key/quota is exhausted.
+ * Fatal results trigger immediate task FAILED when API keys/quotas are exhausted.
+ * Regular tool execution failures (e.g. exit code 1 or 127, missing binaries)
+ * are returned to the model as feedback so the agent can adapt gracefully.
  */
 export function analyzeToolResult(toolName: string, result: unknown): ToolResultAnalysis {
   if (!result || typeof result !== 'object') return { isFatal: false, reason: '' };
 
   const r = result as Record<string, any>;
-
-  // exit 127/126 → environment broken, model cannot fix this
-  if (typeof r.exitCode === 'number' && FATAL_EXIT_CODES.has(r.exitCode)) {
-    const detail = (r.stderr || r.stdout || '').toString().slice(0, 200);
-    return {
-      isFatal: true,
-      reason: `Tool '${toolName}' returned fatal exit code ${r.exitCode}: ${detail}`,
-    };
-  }
 
   // Check all text fields for fatal auth/quota patterns
   const combined = [r.stderr, r.stdout, r.error, r.message]

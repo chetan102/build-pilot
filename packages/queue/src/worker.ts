@@ -76,8 +76,11 @@ export class TaskWorkerManager {
       );
     });
 
-    this.worker.on('error', (err: Error) => {
-      this.logger.error({ err: err.message }, 'Task worker encountered error');
+    this.worker.on('error', (err: any) => {
+      const errMsg = err?.message || (typeof err === 'string' ? err : '');
+      if (errMsg) {
+        this.logger.error({ err: errMsg }, 'Task worker encountered error');
+      }
     });
 
     this.worker.on('stalled', (jobId: string) => {

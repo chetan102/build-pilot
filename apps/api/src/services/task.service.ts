@@ -113,7 +113,17 @@ export class TaskService {
     validateTaskTransition(task.status, TaskStatus.QUEUED, { allowRetry: true });
 
     const previousStatus = task.status;
-    const updated = await taskRepository.updateStatus(taskId, TaskStatus.QUEUED);
+    const shortSuffix = Math.random().toString(36).substring(2, 8);
+    const newBranch = `buildpilot/task-${task.issueNumber || 1}-${shortSuffix}`;
+    const runId = new mongoose.Types.ObjectId().toString();
+
+    const updated = await taskRepository.updateStatus(taskId, TaskStatus.QUEUED, {
+      branch: newBranch,
+      prUrl: null as any,
+      prNumber: null as any,
+      prId: null as any,
+      activeRunId: runId,
+    });
 
     if (!updated) {
       throw new EntityNotFoundError('Task', taskId);
@@ -126,13 +136,13 @@ export class TaskService {
       payload: {
         previousStatus: task.status,
         newStatus: TaskStatus.QUEUED,
+        branch: newBranch,
       },
       level: 'info',
     });
 
     // Enqueue task for background worker retry execution
     try {
-      const runId = new mongoose.Types.ObjectId().toString();
       const meta = { ...((task.metadata as Record<string, unknown>) || {}) };
       let taskProvider = meta.provider as string | undefined;
       let taskModel = meta.model as string | undefined;
@@ -168,15 +178,15 @@ export class TaskService {
         issueNumber: task.issueNumber,
         title: task.title,
         description: task.description,
-        branch: task.branch,
+        branch: newBranch,
         baseBranch: task.baseBranch,
         provider: taskProvider,
         model: taskModel,
         metadata: meta,
       });
       createLogger({ serviceName: 'task-service' }).info(
-        { taskId, branch: task.branch },
-        'Retried task successfully enqueued into background worker queue',
+        { taskId, branch: newBranch, runId },
+        'Retried task successfully enqueued into background worker queue with fresh branch',
       );
     } catch (err) {
       createLogger({ serviceName: 'task-service' }).error(
